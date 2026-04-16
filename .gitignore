@@ -1,0 +1,28 @@
+# .gitignore — Horsterwold Meterstanden
+
+# Configuratie (bevat wachtwoorden & API keys!)
+backend/config.php
+backend/config/*.json
+.env
+.env.*
+
+# Dependencies (als Composer later wordt gebruikt)
+/vendor/
+
+# Lokale uploads
+/public/uploads/
+/documenten/
+/projectplanning/
+
+# OS bestanden
+.DS_Store
+Thumbs.db
+
+# IDE bestanden
+.vscode/
+.idea/
+*.swp
+
+# Log bestanden
+*.log
+/logs/

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Horsterwold Meterstanden</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/img/icon-192.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <section id="login-screen" class="active">
+        <div class="container animate-fade-in" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh;">
+            <div class="logo-wrapper" style="text-align: center; margin-bottom: 2rem;">
+                <img src="logo/logo_wit.jpg" alt="Horsterwold Logo" style="max-width: 180px; height: auto; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            </div>
+            
+            <header style="margin-bottom: 2rem;">
+                <h1 style="font-size: 2.2rem; line-height: 1.2;">Meterstanden<br>doorgeven</h1>
+            </header>
+
+            <div style="text-align: center; width: 100%; padding-top: 1rem;">
+                <a href="admin/" class="btn btn-primary" style="text-decoration: none; display: inline-flex; justify-content: center; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:1.2rem; height:1.2rem;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Inloggen als Beheerder
+                </a>
+                
+                <p style="font-size: 0.95rem; color: var(--text-main); margin: 0; line-height: 1.5;">
+                    Je ontvangt een mail met een uitnodiging om de meterstanden door te geven.
+                </p>
+            </div>
+
+            <footer style="margin-top: 4rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                <div>&copy; 2026 Buitenplaats Horsterwold</div>
+                <div style="opacity: 0.7; font-size: 0.75rem; margin-top: 0.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;">
+                    <span>Gemaakt door</span>
+                    <a href="https://vloeienddigitaal.nl" target="_blank"><img src="logo/vloeienddigitaal_wit.png" alt="Vloeiend Digitaal Logo" style="height: 36px; width: auto; opacity: 0.8;"></a>
+                </div>
+            </footer>
+        </div>
+    </section>
+
+    <!-- DASHBOARD SCREEN -->
+    <section id="dashboard-screen">
+        <div class="container animate-fade-in">
+            <h1>Mijn Kavel</h1>
+            <p class="subtitle">Welkom terug, <span id="user-name">...</span></p>
+            
+            <div class="glass" style="padding: 1.5rem; margin-bottom: 2rem;">
+                <div style="font-size: 0.9rem; color: var(--text-muted);">Kavelnummer</div>
+                <div style="font-size: 1.5rem; font-weight: 600;" id="lot-number">#...</div>
+            </div>
+
+            <h2 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--text-main);">Meterstanden doorgeven</h2>
+
+            <div class="meter-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
+                <button id="btn-meter-water" class="btn btn-meter" onclick="startMeterFlow('water')">
+                    <span class="meter-icon">💧</span>
+                    <span class="meter-title">Watermeter</span>
+                    <span class="meter-status" id="status-water">Actie vereist</span>
+                </button>
+                <button id="btn-meter-gas" class="btn btn-meter" onclick="startMeterFlow('gas')">
+                    <span class="meter-icon">🔥</span>
+                    <span class="meter-title">Gasmeter</span>
+                    <span class="meter-status" id="status-gas">Actie vereist</span>
+                </button>
+                <button id="btn-meter-elec" class="btn btn-meter" onclick="startMeterFlow('elec')">
+                    <span class="meter-icon">⚡</span>
+                    <span class="meter-title">Elektrameter</span>
+                    <span class="meter-status" id="status-elec">Actie vereist</span>
+                </button>
+            </div>
+
+            <h2 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--text-main);">Veelgestelde vragen</h2>
+            <div class="faq-section glass" style="padding: 1rem; margin-bottom: 2rem;">
+                <details class="faq-item">
+                    <summary>Waar vind ik mijn meter?</summary>
+                    <p>De locatie van de meter is meestal in de meterkast in uw recreatiewoning, vaak direct bij de voordeur of achter een specifieke wand in de gang.</p>
+                </details>
+                <details class="faq-item" style="margin-top: 1rem;">
+                    <summary>Wat gebeurt er met de foto's?</summary>
+                    <p>De foto's worden veilig doorgestuurd naar ons systeem. Ze worden tijdelijk opgeslagen om de automatische aflezing te verifiëren en daarna alleen gebruikt voor controle bij onwaarschijnlijke afwijkingen.</p>
+                </details>
+                <details class="faq-item" style="margin-top: 1rem;">
+                    <summary>Hoe geef ik de standen door zonder smartphone of tablet?</summary>
+                    <p>Geen probleem, neem contact op met de beheerder om de meterstanden door te geven.</p>
+                </details>
+            </div>
+
+            <button id="btn-logout" style="background: none; border: none; color: var(--text-muted); cursor: pointer; text-decoration: underline; width: 100%; margin-bottom: 2rem;">
+                Uitloggen
+            </button>
+
+            <footer style="margin-top: 2rem; padding-bottom: 3rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                <div>&copy; 2026 Buitenplaats Horsterwold</div>
+                <div style="opacity: 0.7; font-size: 0.75rem; margin-top: 0.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;">
+                    <span>Gemaakt door</span>
+                    <a href="https://vloeienddigitaal.nl" target="_blank"><img src="logo/vloeienddigitaal_wit.png" alt="Vloeiend Digitaal Logo" style="height: 36px; width: auto; opacity: 0.8;"></a>
+                </div>
+            </footer>
+        </div>
+    </section>
+
+    <!-- PHOTO CAMERA SCREEN -->
+    <section id="photo-screen">
+        <div class="container animate-fade-in photo-container">
+            <video id="camera-stream" autoplay playsinline></video>
+            
+            <!-- Scanning Overlay Grid -->
+            <div class="scan-overlay">
+                <div class="scan-frame"></div>
+                <div class="scan-instruction-box">
+                    <p class="scan-instruction" id="scan-instruction-text">Maak een foto van de <span id="scan-meter-type">...</span></p>
+                    <div id="steady-status" style="margin-top: 1rem; font-size: 0.9rem; color: #4ade80; opacity: 0; transition: opacity 0.3s; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                        <span class="spinner-small" style="width: 12px; height: 12px; border: 2px solid rgba(74, 222, 128, 0.3); border-top-color: #4ade80; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                        Houd de camera stil...
+                    </div>
+                </div>
+                <div class="scan-line"></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="camera-controls">
+                <button class="btn-camera-close" onclick="cancelMeterFlow()" title="Annuleren">✕</button>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+                    <button class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: rgba(255,255,255,0.1); width: auto;" onclick="simulateCapture()">Simuleer Scan</button>
+                    <button id="btn-capture" class="btn-capture" title="Maak foto">
+                        <div class="inner-circle"></div>
+                    </button>
+                </div>
+                <button id="btn-switch-camera" class="btn-camera-close" onclick="switchCamera()" title="Wissel Camera" style="font-size: 1.2rem;">🔄</button>
+            </div>
+            
+            <canvas id="canvas-capture" style="display: none;"></canvas>
+        </div>
+    </section>
+
+    <!-- VERIFY SCREEN -->
+    <section id="verify-screen">
+        <div class="container animate-fade-in">
+            <h1>Controleer <span id="verify-meter-name" style="color: var(--primary);">...</span></h1>
+            <p class="subtitle">Klopt deze meterstand?</p>
+            
+            <div class="glass" style="padding: 1.5rem; margin-bottom: 2rem; display: flex; flex-direction: column; align-items: center;">
+                <div style="width: 100%; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; background: #000;">
+                    <img id="verify-image" src="" alt="Gemaakte foto" style="width: 100%; height: auto; display: block; max-height: 200px; object-fit: contain;">
+                </div>
+                
+                <div class="form-group" style="width: 100%; margin-bottom: 1rem;">
+                    <label for="ocr-meter-number" style="text-align: center; font-size: 0.8rem; opacity: 0.7;">Gedetecteerd meternummer (test)</label>
+                    <input type="text" id="ocr-meter-number" value="..." style="text-align: center; font-size: 1rem; border: none; background: rgba(255,255,255,0.05); color: var(--text-muted);" readonly>
+                </div>
+
+                <div class="form-group" style="width: 100%;">
+                    <label for="ocr-result" style="text-align: center;">Uitgelezen waarde</label>
+                    <input type="number" id="ocr-result" value="0" style="text-align: center; font-size: 1.5rem; font-weight: 700; color: var(--primary);" readonly>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <button class="btn btn-primary" onclick="confirmMeter()">
+                    Ja, verstuur
+                </button>
+                <button class="btn" style="background: var(--glass-bg); color: var(--text-main); border: 1px solid var(--glass-border);" onclick="retakePhoto()">
+                    Opnieuw proberen
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- SUCCESS SCREEN -->
+    <section id="success-screen">
+        <div class="container animate-fade-in" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+            <h1>Bedankt!</h1>
+            <p class="subtitle" style="margin-bottom: 2rem;">Je <span id="success-meter-name">meter</span>stand is succesvol ontvangen.</p>
+            
+            <div class="glass" style="padding: 1.5rem; margin-bottom: 2rem; width: 100%;">
+                <p id="success-next-message" style="margin-bottom: 1.5rem;">Je hebt nog meterstanden open staan.</p>
+                
+                <!-- Incasso Blok (Verborgen by default) -->
+                <div id="incasso-section" style="display: none; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; text-align: left; border: 1px solid rgba(74, 222, 128, 0.2);">
+                    <h3 style="font-size: 1.1rem; color: #4ade80; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🏦</span> Gemakkelijk betalen?
+                    </h3>
+                    <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-muted);">
+                        Wil je de jaarafrekening voortaan via automatische incasso betalen? Zo ben je altijd op tijd en heb je er geen omkijken meer naar. Vul hieronder je IBAN in.
+                    </p>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="incasso-iban" style="font-size: 0.85rem; color:var(--text-main);">Je IBAN Rekeningnummer</label>
+                        <input type="text" id="incasso-iban" placeholder="NL01 BANK 0123 4567 89" autocomplete="off" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: white; text-transform: uppercase;">
+                    </div>
+
+                    <label style="display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.85rem; cursor: pointer; color: var(--text-main);">
+                        <input type="checkbox" id="incasso-checkbox" style="margin-top: 0.2rem;">
+                        <span>Ik verleen hierbij tot wederopzegging een doorlopende machtiging aan Recreatiepark Horsterwold om de jaarlijkse afrekening af te schrijven van mijn bankrekening.</span>
+                    </label>
+                    <button id="btn-save-incasso" class="btn btn-primary" style="margin-top: 1rem; width: 100%; padding: 0.75rem; font-size: 0.9rem;" onclick="saveIncassoMandate()">
+                        Machtiging Opslaan
+                    </button>
+                    <div id="incasso-feedback" style="margin-top: 0.5rem; font-size: 0.85rem; text-align: center;"></div>
+                </div>
+
+                <button id="btn-next-meter" class="btn btn-primary" style="margin-bottom: 1rem; display: none;" onclick="startNextMeterFlow()">
+                    Geef stand <span id="next-meter-type">...</span> door
+                </button>
+                <button class="btn" style="background: var(--glass-bg); color: var(--text-main); border: 1px solid var(--glass-border);" onclick="finishMeterFlow()">
+                    Terug naar Dashboard
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <style>
+        /* Camera UI Styles */
+        .photo-container {
+            max-width: 100%; width: 100%; height: 100vh; padding: 0; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background: #000; position: relative; overflow: hidden;
+        }
+        #camera-stream {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .scan-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center; pointer-events: none;
+            background: rgba(0,0,0,0.5); /* Semi-transparent dimming outside the frame */
+            /* We will clip this to make a clear window in the middle later if needed */
+        }
+        .scan-frame {
+            position: absolute; width: 85%; height: 28%; top: 30%;
+            border: 2px solid var(--primary); border-radius: 12px;
+            box-shadow: 0 0 50px rgba(192, 132, 252, 0.4), 0 0 0 2000px rgba(0,0,0,0.6);
+        }
+        .scan-instruction-box {
+            position: absolute; top: 2rem; width: 100%; text-align: center; padding: 0 1rem;
+        }
+        .scan-instruction {
+            color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8); font-weight: 500; font-size: 1.1rem;
+        }
+        #scan-meter-type {
+            color: var(--primary); font-weight: 700;
+        }
+        .scan-line {
+            position: absolute; width: 80%; height: 2px; background: var(--primary); top: 35%;
+            animation: scan 2s infinite ease-in-out; box-shadow: 0 0 10px var(--primary);
+        }
+        @keyframes scan {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(22vh); opacity: 0; } /* Roughly the height of the frame */
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .camera-controls {
+            position: absolute; bottom: 3rem; width: 100%; padding: 0 2rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .btn-camera-close {
+            background: rgba(255,255,255,0.1); width: 60px; height: 60px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; border: 1px solid rgba(255,255,255,0.2);
+            color: white; font-size: 1.5rem; cursor: pointer; backdrop-filter: blur(4px);
+        }
+        .btn-capture {
+            width: 80px; height: 80px; border: 4px solid #fff; border-radius: 50%; padding: 4px;
+            cursor: pointer; background: transparent; display: flex; align-items: center; justify-content: center;
+        }
+        .inner-circle {
+            width: 100%; height: 100%; background: #fff; border-radius: 50%; transition: transform 0.1s;
+        }
+        .btn-capture:active .inner-circle {
+            transform: scale(0.9);
+        }
+    </style>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

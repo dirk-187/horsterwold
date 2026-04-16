@@ -1,0 +1,233 @@
+/* 
+ * Horsterwold PWA — Main Styling
+ * Design: Premium, Modern, Glassmorphism
+ */
+
+:root {
+    --primary: #c084fc; /* Pastel Purple */
+    --primary-dark: #a855f7;
+    --secondary: #6366f1; /* Indigo */
+    --accent: #f472b6; /* Pastel Pink for highlights */
+    --bg-dark: #0f172a; /* Sleek Slate Dark */
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --font-main: 'Outfit', sans-serif;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: var(--font-main);
+    background: radial-gradient(circle at top right, #1e293b, var(--bg-dark));
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Glassmorphism Containers */
+.glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: var(--card-shadow);
+}
+
+.container {
+    width: 90%;
+    max-width: 440px;
+    margin: auto;
+    padding: 2rem;
+}
+
+/* Typography */
+h1 {
+    font-weight: 700;
+    font-size: 2.5rem;
+    background: linear-gradient(135deg, #473f45 0%, var(--primary) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+p.subtitle {
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 2.5rem;
+    font-size: 1.1rem;
+}
+
+/* Forms & Inputs */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+input[type="email"], 
+input[type="text"],
+input[type="number"] {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: rgb(255, 255, 255);
+    border: 1px solid var(--primary-dark);
+    border-radius: 12px;
+    color: #000;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+input:focus {
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.933);
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+}
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #2e1065;
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.8s ease forwards;
+}
+
+/* Sections */
+#login-screen, #dashboard-screen, #input-screen, #photo-screen, #verify-screen, #success-screen {
+    display: none;
+}
+
+#login-screen.active, #dashboard-screen.active, #input-screen.active, #photo-screen.active, #verify-screen.active, #success-screen.active {
+    display: block;
+}
+
+/* Meter Buttons */
+.btn-meter {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    justify-content: flex-start;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+    color: var(--text-main);
+}
+.btn-meter:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+.btn-meter:disabled {
+    cursor: default;
+    opacity: 0.7;
+    background: rgba(0, 0, 0, 0.2);
+}
+.btn-meter.completed {
+    border-color: rgba(74, 222, 128, 0.4);
+}
+.btn-meter .meter-icon {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+}
+.btn-meter .meter-title {
+    font-weight: 500;
+    font-size: 1.1rem;
+    flex-grow: 1;
+    text-align: left;
+}
+.btn-meter .meter-status {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: var(--primary);
+    color: #2e1065;
+    font-weight: 600;
+    margin-left: auto;
+}
+.btn-meter.completed .meter-status {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+/* FAQ Section */
+.faq-item summary {
+    cursor: pointer;
+    font-weight: 500;
+    list-style: none; /* remove default arrow */
+    outline: none;
+    color: var(--text-main);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.faq-item summary::-webkit-details-marker {
+    display: none;
+}
+.faq-item summary::after {
+    content: '+';
+    color: var(--primary);
+    font-size: 1.5rem;
+    line-height: 1;
+    font-weight: 300;
+    transition: transform 0.3s ease;
+}
+.faq-item[open] summary::after {
+    transform: rotate(45deg);
+}
+.faq-item p {
+    margin-top: 1rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}

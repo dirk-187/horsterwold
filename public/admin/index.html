@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beheer Dashboard — Horsterwold</title>
+    <meta name="description" content="Admin dashboard voor beheer van kavels, uitnodigingen, meterstanden en afwijkingen in het Horsterwold park.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+    <!-- ===== ADMIN LOGIN SCHERM ===== -->
+    <div id="admin-login-overlay" style="display:none; position:fixed; inset:0; background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); z-index:9999; display:flex; align-items:center; justify-content:center;">
+        <div class="glass" style="max-width:440px; width:90%; padding:2.5rem; text-align:center;">
+            <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+            <h2 style="font-size:1.5rem; margin-bottom:0.5rem;">Beheer Dashboard</h2>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:2rem;">Voer je e-mailadres in om een inloglink te ontvangen.</p>
+
+            <form id="admin-login-form">
+                <div class="form-group" style="text-align:left; margin-bottom:1rem;">
+                    <label style="font-size:0.85rem;">E-mailadres beheerder</label>
+                    <input type="email" id="admin-email-input" class="form-input" placeholder="jan@allemeters.nl" required style="width:100%; padding:0.75rem; margin-top:0.4rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:0.875rem; font-size:1rem;">Inloglink Aanvragen</button>
+            </form>
+            <p id="admin-login-feedback" style="margin-top:1rem; font-size:0.85rem;"></p>
+
+            <!-- ALLEEN IN DEVELOPMENT: toon debug link -->
+            <div id="admin-debug-link-box" style="display:none; margin-top:1.5rem; padding:1rem; background:rgba(0,0,0,0.3); border-radius:8px; border:1px dashed rgba(255,255,255,0.2); text-align:left;">
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">🛠️ <em>Development only</em> — Uitnodigingsmail Link:</p>
+                <a id="admin-debug-link" href="#" style="font-size:0.75rem; color:#60a5fa; word-break:break-all;"></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== HEADER ===== -->
+    <header class="admin-header">
+        <div class="header-brand" style="display: flex; align-items: center; gap: 1rem;">
+            <img src="../logo/logo_gaswaterlicht.png" alt="Logo Gas Water Licht" style="height: 60px; object-fit: contain;">
+            <div>
+                <h1>Beheer Dashboard</h1>
+                <p class="header-sub">Horsterwold Meterstanden</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-ghost btn-lg" id="btn-open-tariffs" title="Systeem & Tarieven Beheren">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                Beheren
+            </button>
+            <button class="btn btn-ghost btn-lg" id="btn-open-invoices" title="Facturen overzicht">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h0M2 9.5h20"/></svg>
+                Facturen
+            </button>
+            <button class="btn btn-primary btn-lg btn-glow" id="btn-new-billing" title="Start nieuwe afrekening">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-5a2.9 2.9 0 0 1 1.89-.91"/><path d="M15 15v5a2.9 2.9 0 0 0 .91 1.89c1.97 1.45 5 2 5 2s-3.74-.5-5-2"/></svg>
+                Nieuwe Afrekening
+            </button>
+            <button class="btn btn-ghost btn-lg" id="btn-admin-logout" onclick="adminLogout()" title="Uitloggen">
+                Uitloggen
+            </button>
+        </div>
+    </header>
+
+    <main class="container-wide">
+
+        <!-- ===== GEM. VERBRUIK ===== -->
+        <section class="avg-strip animate-fade-in">
+            <div class="avg-item">
+                <span class="avg-icon">🔥</span>
+                <span class="avg-value" id="stat-avg-gas">—</span>
+                <span class="avg-label">Gem. gas (m³)</span>
+            </div>
+            <div class="avg-divider"></div>
+            <div class="avg-item">
+                <span class="avg-icon">💧</span>
+                <span class="avg-value" id="stat-avg-water">—</span>
+                <span class="avg-label">Gem. water (m³)</span>
+            </div>
+            <div class="avg-divider"></div>
+            <div class="avg-item">
+                <span class="avg-icon">⚡</span>
+                <span class="avg-value" id="stat-avg-elec">—</span>
+                <span class="avg-label">Gem. elektra (kWh)</span>
+            </div>
+        </section>
+
+        <!-- ===== FILTER BAR (GECOMBINEERD MET STATUS) ===== -->
+        <section class="glass filter-bar animate-fade-in">
+            <div class="filter-top-row">
+                <div class="search-container">
+                    <input type="text" id="search-lot" class="form-input" placeholder="🔍 Zoek kavel...">
+                </div>
+
+                <div class="type-selector">
+                    <label class="type-radio">
+                        <input type="radio" name="filter-type" value="all" checked style="display:none;">
+                        <span class="type-btn">Alle</span>
+                    </label>
+                    <label class="type-radio">
+                        <input type="radio" name="filter-type" value="bebouwd" style="display:none;">
+                        <span class="type-btn">Bebouwd</span>
+                    </label>
+                    <label class="type-radio">
+                        <input type="radio" name="filter-type" value="onbebouwd" style="display:none;">
+                        <span class="type-btn">Onbebouwd</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="status-filters" id="stats-section">
+                <div class="filter-card stat-pill active" data-filter="all">
+                    <span class="stat-pill-icon">🏘️</span>
+                    <span class="stat-pill-value" id="stat-total-lots">—</span>
+                    <span class="stat-pill-label">Alle</span>
+                </div>
+                <div class="filter-card stat-pill pill-blue" data-filter="verstuurd">
+                    <span class="stat-pill-icon">✉️</span>
+                    <span class="stat-pill-value" id="stat-magic-sent">—</span>
+                    <span class="stat-pill-label">Mails</span>
+                </div>
+                <div class="filter-card stat-pill pill-yellow" data-filter="wacht">
+                    <span class="stat-pill-icon">⏳</span>
+                    <span class="stat-pill-value" id="stat-awaiting">—</span>
+                    <span class="stat-pill-label">Wacht</span>
+                </div>
+                <div class="filter-card stat-pill pill-orange" data-filter="actie">
+                    <span class="stat-pill-icon">🔍</span>
+                    <span class="stat-pill-value" id="stat-action">—</span>
+                    <span class="stat-pill-label">Actie</span>
+                </div>
+                <div class="filter-card stat-pill pill-red" data-filter="afwijking">
+                    <span class="stat-pill-icon">⚠️</span>
+                    <span class="stat-pill-value" id="stat-afwijkingen">—</span>
+                    <span class="stat-pill-label">Afwijking</span>
+                </div>
+                <div class="filter-card stat-pill pill-green" data-filter="approved">
+                    <span class="stat-pill-icon">✅</span>
+                    <span class="stat-pill-value" id="stat-approved">—</span>
+                    <span class="stat-pill-label">Gereed</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAYMENT BAR REMOVED -->
+
+        <!-- BULK TOOLBAR REMOVED -->
+
+        <!-- ===== KAVELTABEL ===== -->
+        <section class="lot-table-wrapper animate-fade-in">
+            <table class="lot-table" id="lot-table">
+                <thead>
+                    <tr>
+                        <!-- CHECKBOX COLUMN REMOVED -->
+                        <th class="col-kavel">Kavel</th>
+                        <th class="col-type">Type</th>
+                        <th class="col-magic">Uitnodigingsmail</th>
+                        <th class="col-stand">Status</th>
+                        <th class="col-gas" style="text-align: right;">Gas (m³)</th>
+                        <th class="col-water" style="text-align: right;">Water (m³)</th>
+                        <th class="col-elec" style="text-align: right;">Elec (kWh)</th>
+                        <th class="col-betaling">Betaling</th>
+                        <th class="col-acties" style="text-align: right;">Acties</th>
+                    </tr>
+                </thead>
+                <tbody id="lot-tbody">
+                    <tr>
+                        <td colspan="11" class="table-loading">Data laden...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ===== RESULTAAT TELLER ===== -->
+        <div class="result-count" id="result-count"></div>
+
+    </main>
+    
+    <footer class="admin-footer animate-fade-in" style="margin-top: 4rem; padding: 2rem 0; border-top: 1px solid rgba(255,255,255,0.05); text-align: center;">
+        <div class="container-wide" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+            <p style="font-size: 0.85rem; color: var(--text-muted);">&copy; 2026 Buitenplaats Horsterwold — Meterstanden Beheer</p>
+            <a href="https://vloeienddigitaal.nl" target="_blank" title="Gerealiseerd door Vloeiend Digitaal" style="opacity: 0.6; transition: opacity 0.2s;">
+                <img src="../logo/vloeienddigitaal_wit.png" alt="Vloeiend Digitaal Logo" style="height: 30px; object-fit: contain;">
+            </a>
+        </div>
+    </footer>
+
+    <!-- ===== TOAST NOTIFICATIE ===== -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ===== CONFIRMATIE DIALOG ===== -->
+    <div class="overlay" id="confirm-overlay" style="display:none; z-index: 10500;">
+        <div class="glass confirm-dialog">
+            <h3 id="confirm-title">Bevestiging</h3>
+            <p id="confirm-message"></p>
+            <div class="confirm-actions">
+                <button class="btn btn-ghost" id="confirm-cancel">Annuleren</button>
+                <button class="btn btn-primary" id="confirm-ok">Bevestigen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== DETAIL MODAL ===== -->
+    <div class="overlay" id="modal-overlay" style="display:none;">
+        <div class="glass detail-modal">
+            <div class="modal-head">
+                <div>
+                    <h2 id="modal-title">Kavel Details</h2>
+                    <p id="modal-subtitle" class="header-sub"></p>
+                </div>
+                <button class="btn-close" id="modal-close">✕</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="tab-history">📋 Meterstanden</button>
+                <button class="tab-btn" data-tab="tab-invoice">💶 Factuur</button>
+            </div>
+
+            <!-- Tab inhoud -->
+            <div class="modal-body">
+                <div id="tab-history" class="tab-content active">
+                    <div id="modal-history-content">Laden...</div>
+                </div>
+                <div id="tab-invoice" class="tab-content">
+                    <!-- Batch controls (zichtbaar bij batch proces) -->
+                    <div id="batch-controls" class="glass" style="display:none; margin-bottom: 1.5rem; padding: 1rem; border: 1px solid var(--primary); background: rgba(59, 130, 246, 0.05); display: flex; justify-content: space-between; align-items: center;">
+                        <span id="batch-index-text" style="font-size: 0.9rem; font-weight: 600;">Factuur 1 van 10</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-ghost btn-xs" onclick="stopBatchInvoicing()">Stop Batch</button>
+                            <button class="btn btn-secondary btn-xs" onclick="skipBatchInvoice()">Sla over</button>
+                        </div>
+                    </div>
+
+                    <div id="modal-invoice-content">
+                        <!-- Wordt dynamisch gevuld door JS -->
+                        <div class="loading-state">Berekening laden...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- ===== FACTUREN DASHBOARD MODAL ===== -->
+    <div class="overlay" id="invoices-modal-overlay" style="display:none;">
+        <div class="detail-modal" style="max-width:800px;">
+             <div class="modal-head">
+                 <h2>💶 Facturen Beheer</h2>
+                 <button class="btn-close" id="invoices-close" onclick="toggleModal('invoices-modal-overlay', false)">✕</button>
+             </div>
+             <div class="modal-body">
+                 
+                 <div class="invoice-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                     <div class="glass stat-card" style="padding: 1.5rem; text-align: center;">
+                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Klaar voor facturatie</div>
+                         <div style="font-size: 1.8rem; font-weight: 700;" id="inv-stat-ready">—</div>
+                     </div>
+                     <div class="glass stat-card" style="padding: 1.5rem; text-align: center;">
+                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Facturen opgesteld</div>
+                         <div style="font-size: 1.8rem; font-weight: 700;" id="inv-stat-invoiced">—</div>
+                     </div>
+                     <div class="glass stat-card" style="padding: 1.5rem; text-align: center;">
+                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Verstuurd</div>
+                         <div style="font-size: 1.8rem; font-weight: 700; color: #34d399;" id="inv-stat-sent">—</div>
+                     </div>
+                 </div>
+
+                 <!-- Progress Bar / Counter Section -->
+                 <div class="glass" style="padding: 1.25rem; margin-bottom: 2rem; border: 1px solid rgba(52, 211, 153, 0.2); background: rgba(52, 211, 153, 0.02);">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                         <span style="font-weight: 600; font-size: 0.95rem;">Facturatie Voortgang</span>
+                         <span style="font-size: 0.9rem; color: var(--text-muted);" id="inv-progress-text">0 van de 0 bebouwde kavels verstuurd</span>
+                     </div>
+                     <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                         <div id="inv-progress-bar" style="height: 100%; background: linear-gradient(90deg, #34d399, #10b981); width: 0%; transition: width 0.5s ease;"></div>
+                     </div>
+                 </div>
+
+                 <div class="section-title">Klaar om te factureren</div>
+                 <div class="glass" style="max-height: 300px; overflow-y: auto; margin-bottom: 2rem;">
+                     <table class="data-table" style="margin: 0;">
+                         <thead>
+                             <tr>
+                                 <th>Kavel</th>
+                                 <th>Bewoner</th>
+                                 <th style="text-align: right;">Actie</th>
+                             </tr>
+                         </thead>
+                         <tbody id="inv-ready-list">
+                             <tr><td colspan="3" class="table-loading">Laden...</td></tr>
+                         </tbody>
+                     </table>
+                 </div>
+
+                 <div style="text-align: center;">
+                     <button class="btn btn-primary btn-lg btn-glow" id="btn-start-batch-invoicing" style="padding: 1rem 2.5rem;">
+                         🚀 Start Batch Verwerking
+                     </button>
+                 </div>
+             </div>
+        </div>
+    </div>
+
+    <!-- ===== TARIFFS MODAL ===== -->
+    <div class="overlay" id="tariffs-overlay" style="display:none;">
+        <div class="detail-modal" style="max-width:650px;">
+            <div class="modal-head">
+                <h2>⚙️ Systeem & Tarieven Beheren</h2>
+                <button class="btn-close" id="tariffs-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-tariffs">
+                    <div class="section-title">Afwijking Parameters</div>
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label>Max Tijd Foto/Upload (min)</label>
+                            <input type="number" id="param-max-time" class="form-input" value="15">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Verbruiksafwijking (%)</label>
+                            <input type="number" id="param-max-dev" class="form-input" value="25">
+                        </div>
+                    </div>
+
+                    <div class="section-title">Verbruikstarieven (incl. BTW)</div>
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label>Gas (€/m³)</label>
+                            <input type="number" step="0.0001" id="rate-gas" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Water (€/m³)</label>
+                            <input type="number" step="0.0001" id="rate-water" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Elektra (€/kWh)</label>
+                            <input type="number" step="0.0001" id="rate-elec" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="section-title">Vaste Lasten (Bebouwd) (incl. BTW)</div>
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label>Vast Gas (€/mnd)</label>
+                            <input type="number" step="0.01" id="fixed-gas-beb" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Vast Water (€/mnd)</label>
+                            <input type="number" step="0.01" id="fixed-water-beb" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Vast Elek (€/mnd)</label>
+                            <input type="number" step="0.01" id="fixed-elec-beb" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>VVE (€/jr)</label>
+                            <input type="number" step="0.01" id="fixed-vve-beb" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Erfpacht (€/jr)</label>
+                            <input type="number" step="0.01" id="fixed-erfpacht-beb" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="section-title">Vaste Lasten (Onbebouwd) (incl. BTW)</div>
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label>VVE (€/jr)</label>
+                            <input type="number" step="0.01" id="fixed-vve-onb" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Erfpacht (€/jr)</label>
+                            <input type="number" step="0.01" id="fixed-erfpacht-onb" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="section-title" style="margin-top:2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2rem;">🛠️ Scanner Ontwikkeltool (Test)</div>
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                            Gebruik deze tool om de AI-fotoscanner te testen met een afbeelding. Er wordt geen data opgeslagen.
+                        </p>
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label>Selecteer meter-foto om te scannen</label>
+                            <input type="file" id="test-ocr-upload" accept="image/*" class="form-input">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-run-ocr-test">
+                                📁 Bestand Uploaden
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-open-admin-scanner">
+                                📸 Scanner Openen
+                            </button>
+                        </div>
+                        <div id="test-ocr-result" style="margin-top: 1rem; font-family: monospace; font-size: 0.8rem; background: #000; padding: 1rem; border-radius: 8px; display: none; white-space: pre-wrap;">
+                        </div>
+                    </div>
+
+                    <div class="section-title" style="margin-top:2rem;">Organisatie & Bankgegevens</div>
+                    <div class="form-group" style="margin-bottom:1rem;">
+                        <label>Naam Organisatie (op factuur)</label>
+                        <input type="text" id="sys-park-name" class="form-input" placeholder="bijv. Buitenplaats Horsterwold">
+                    </div>
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label>IBAN Nummer</label>
+                            <input type="text" id="sys-iban" class="form-input" placeholder="NL00BANK0000000000">
+                        </div>
+                        <div class="form-group">
+                            <label>Incassant-ID (SEPA)</label>
+                            <input type="text" id="sys-creditor-id" class="form-input" placeholder="NL99ZZZ...">
+                        </div>
+                        <div class="form-group">
+                            <label>Contact E-mail</label>
+                            <input type="email" id="sys-contact-email" class="form-input" placeholder="beheer@park.nl">
+                        </div>
+                    </div>
+
+                    <div class="section-title" style="margin-top:2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2rem;">📅 Jaarlijkse Afsluiting</div>
+                    <div class="glass" style="padding: 1.25rem; border: 1px solid rgba(255,160,0,0.3); border-radius: 12px; background: rgba(255,160,0,0.05);">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                            Sluit het huidige jaar af en start een nieuw boekjaar. Hiermee worden de huidige standen vastgelegd als beginstand voor volgend jaar.
+                        </p>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-finalize-year" style="border-color: #fbbf24; color: #fbbf24;">
+                            🏁 Jaar Afsluiten & Nieuw Jaar Starten
+                        </button>
+                    </div>
+
+                    <div class="section-title" style="margin-top:2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2rem;">👤 Beheerders beheren</div>
+                    <div id="admin-list-container" style="display: grid; gap: 0.75rem; margin-bottom: 1.5rem;">
+                        <!-- Wordt dynamisch gevuld -->
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-show-add-admin">
+                        ➕ Nieuwe beheerder toevoegen
+                    </button>
+
+                    <div class="modal-actions" style="margin-top:2rem;">
+                        <button type="button" class="btn btn-ghost" id="tariffs-cancel">Annuleren</button>
+                        <button type="submit" class="btn btn-primary" id="tariffs-submit">💾 Wijzigingen Opslaan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MANUAL INPUT MODAL ===== -->
+    <div class="overlay" id="manual-input-overlay" style="display:none;">
+        <div class="detail-modal manual-modal">
+            <div class="modal-head">
+                <h2>✍️ Handmatige Invoer</h2>
+                <button class="btn-close" id="manual-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-manual-input">
+                    <input type="hidden" id="manual-lot-id">
+                    
+                    <div class="form-section">
+                        <label>Foto van de meter:</label>
+                        <input type="file" id="manual-photo" accept="image/*" class="form-input">
+                        <div id="manual-photo-preview" class="photo-preview"></div>
+                    </div>
+
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label for="manual-gas">Gas (m³)</label>
+                            <input type="number" step="0.001" id="manual-gas" class="form-input" placeholder="0.000">
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-water">Water (m³)</label>
+                            <input type="number" step="0.001" id="manual-water" class="form-input" placeholder="0.000">
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-elec">Elektra (kWh)</label>
+                            <input type="number" step="0.001" id="manual-elec" class="form-input" placeholder="0.000">
+                        </div>
+                    </div>
+
+                    <div class="modal-actions" style="margin-top:2rem;">
+                        <button type="button" class="btn btn-ghost" id="manual-cancel">Annuleren</button>
+                        <button type="submit" class="btn btn-primary" id="manual-submit">💾 Opslaan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- ===== BEWONER BEHEREN MODAL ===== -->
+    <div class="overlay" id="resident-modal-overlay" style="display:none;">
+        <div class="glass detail-modal" style="max-width:450px;">
+            <div class="modal-head">
+                <h2 id="resident-modal-title">👤 Bewoner Beheren</h2>
+                <button class="btn-close" onclick="toggleModal('resident-modal-overlay', false)">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-resident">
+                    <input type="hidden" id="resident-lot-id">
+                    <input type="hidden" id="resident-action" value="add"> <!-- add of edit -->
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;" id="resident-modal-desc">
+                        Koppel een nieuwe bewoner aan kavel <strong id="resident-lot-nr">#</strong>.
+                    </p>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Volledige Naam</label>
+                        <input type="text" id="resident-name" class="form-input" placeholder="bijv. Mevr. Janssen" required style="width:100%;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label>E-mailadres</label>
+                        <input type="email" id="resident-email" class="form-input" placeholder="bewoner@online.nl" required style="width:100%;">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-ghost" onclick="toggleModal('resident-modal-overlay', false)">Annuleren</button>
+                        <button type="submit" class="btn btn-primary">💾 Gegevens bijwerken</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ADMIN SCANNER OVERLAY ===== -->
+    <div class="overlay" id="admin-scanner-overlay" style="display:none; z-index: 10001;">
+        <div class="glass" style="max-width: 500px; width: 90%; padding: 1.5rem; text-align: center;">
+            <h3 style="margin-bottom: 1rem;">Scanner Testen</h3>
+            <div id="admin-camera-container" style="position: relative; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem;">
+                <video id="admin-camera-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                <div class="scan-frame" style="position: absolute; inset: 0; border: 2px dashed rgba(255,255,255,0.5); margin: 20%; pointer-events: none;"></div>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <button type="button" class="btn btn-ghost" id="btn-admin-scanner-close">Annuleren</button>
+                <button type="button" class="btn btn-primary" id="btn-admin-scanner-capture">📸 Foto Maken</button>
+            </div>
+            <canvas id="admin-scanner-canvas" style="display: none;"></canvas>
+        </div>
+    </div>
+
+    <!-- ===== ADMIN USER MODAL ===== -->
+    <div class="overlay" id="admin-user-modal-overlay" style="display:none; z-index: 10002;">
+        <div class="glass detail-modal" style="max-width:400px;">
+            <div class="modal-head">
+                <h2 id="admin-modal-title">Beheerder toevoegen</h2>
+                <button class="btn-close" onclick="toggleModal('admin-user-modal-overlay', false)">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-admin-user">
+                    <input type="hidden" id="admin-user-id">
+                    <div class="form-group" style="margin-bottom:1rem;">
+                        <label>Naam</label>
+                        <input type="text" id="admin-user-name" class="form-input" placeholder="Naam" required style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:1.5rem;">
+                        <label>E-mailadres</label>
+                        <input type="email" id="admin-user-email" class="form-input" placeholder="email@domein.nl" required style="width: 100%;">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-ghost" onclick="toggleModal('admin-user-modal-overlay', false)">Annuleren</button>
+                        <button type="submit" class="btn btn-primary">💾 Opslaan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: NIEUWE BEWONER ===== -->
+    <div class="overlay" id="modal-new-resident" style="display:none;">
+        <div class="glass detail-modal" style="max-width:500px; padding: 2.5rem;">
+            <div class="modal-head" style="padding: 0 0 1.5rem 0; border: none;">
+                <h2 id="new-resident-title" style="margin:0;">Nieuwe Bewoner Toevoegen</h2>
+                <button class="btn-close" onclick="toggleModal('modal-new-resident', false)">✕</button>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                Voer de gegevens van de nieuwe bewoner in. De huidige meterstanden worden gebruikt als beginstand.
+            </p>
+            
+            <form id="form-new-resident">
+                <input type="hidden" id="nr-lot-id">
+                <div class="form-group">
+                    <label>Naam Bewoner</label>
+                    <input type="text" id="nr-name" class="form-input" required placeholder="Bijv. Jan de Vries">
+                </div>
+                <div class="form-group">
+                    <label>E-mailadres</label>
+                    <input type="email" id="nr-email" class="form-input" required placeholder="naam@voorbeeld.nl">
+                </div>
+                <div class="form-group">
+                    <label>Ingangsdatum</label>
+                    <input type="date" id="nr-start-date" class="form-input" required>
+                </div>
+                
+                <div class="modal-actions" style="margin-top:2rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button type="button" class="btn btn-ghost" onclick="toggleModal('modal-new-resident', false)">Annuleren</button>
+                    <button type="submit" class="btn btn-primary">Bewoner Activeren</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/admin.js?v=5"></script>
+</body>
+</html>
