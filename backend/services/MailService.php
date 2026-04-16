@@ -124,4 +124,44 @@ class MailService
             return false;
         }
     }
+
+    /**
+     * Send admin logic magic link
+     */
+    public function sendAdminLoginEmail(string $toEmail, string $magicLink): bool
+    {
+        try {
+            $settings = new SettingsService();
+            $parkName = $settings->get('park_name', 'Horsterwold');
+
+            $mail = $this->getMailer();
+            $mail->addAddress($toEmail);
+            
+            $mail->isHTML(true);
+            $mail->Subject = "Beheerders Login — {$parkName}";
+            
+            $body = "
+                <div style='font-family: sans-serif; line-height: 1.6; color: #333;'>
+                    <h2>Beheerders Login</h2>
+                    <p>Hier is uw persoonlijke inloglink voor het beheer van {$parkName}. Deze link is 1 uur geldig.</p>
+                    <p style='margin: 2rem 0;'>
+                        <a href='{$magicLink}' style='background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;'>
+                            👉 Inloggen als Beheerder
+                        </a>
+                    </p>
+                    <hr style='border: 0; border-top: 1px solid #eee; margin: 2rem 0;'>
+                    <p>Met vriendelijke groet,<br><strong>Systeem {$parkName}</strong></p>
+                </div>
+            ";
+            
+            $mail->Body = $body;
+            $mail->AltBody = strip_tags(str_replace('<br>', \"\\n\", $body));
+            
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            error_log(\"Admin Login Mail Error: \" . $e->getMessage());
+            return false;
+        }
+    }
 }

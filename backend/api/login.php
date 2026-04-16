@@ -25,6 +25,16 @@ try {
 
             if ($link) {
                 // In productie: hier een e-mail sturen.
+                $mailSent = false;
+                if ($isAdmin) {
+                    require_once __DIR__ . '/../services/MailService.php';
+                    $mailService = new \Horsterwold\Services\MailService();
+                    $mailSent = $mailService->sendAdminLoginEmail($email, $link);
+                    if (!$mailSent) {
+                        throw new Exception('E-mail kon niet worden verzonden. Controleer de netwerkinstellingen.');
+                    }
+                }
+
                 // In development: geef de url terug voor testen.
                 echo json_encode([
                     'success' => true,
