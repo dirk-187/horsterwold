@@ -1,7 +1,7 @@
 # .gitignore — Horsterwold Meterstanden
 
 # Configuratie (bevat wachtwoorden & API keys!)
-# config.php is GEEN geheim meer (secrets staan in .env), maar config.example.php is de template
+backend/config.php
 backend/config/*.json
 .env
 .env.*
