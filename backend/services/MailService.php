@@ -155,12 +155,12 @@ class MailService
             ";
             
             $mail->Body = $body;
-            $mail->AltBody = strip_tags(str_replace('<br>', \"\\n\", $body));
+            $mail->AltBody = strip_tags(str_replace('<br>', "\n", $body));
             
             $mail->send();
             return true;
         } catch (Exception $e) {
-            error_log(\"Admin Login Mail Error: \" . $e->getMessage());
+            error_log("Admin Login Mail Error: " . $e->getMessage());
             return false;
         }
     }
