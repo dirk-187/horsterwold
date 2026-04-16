@@ -13,6 +13,7 @@ backend/config/*.json
 /public/uploads/
 /documenten/
 /projectplanning/
+/scratch/
 
 # OS bestanden
 .DS_Store
