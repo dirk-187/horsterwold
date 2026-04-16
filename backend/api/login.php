@@ -7,10 +7,10 @@
 ob_start(); // Start output buffering
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../core/Database.php';
-require_once __DIR__ . '/../services/AuthService.php';
-
 try {
+    require_once __DIR__ . '/../core/Database.php';
+    require_once __DIR__ . '/../services/AuthService.php';
+
     $authService = new AuthService();
     $input = json_decode(file_get_contents('php://input'), true);
     $action = $input['action'] ?? '';
