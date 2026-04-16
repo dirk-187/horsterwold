@@ -4,6 +4,7 @@
  * Verwerkt Magic Link aanvragen en validatie — voor zowel bewoners als beheerders.
  */
 
+ob_start(); // Start output buffering
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../core/Database.php';
@@ -35,11 +36,13 @@ try {
                     }
                 }
 
+                $obContent = ob_get_clean(); // Discard any warnings from sending the mail
                 // In development: geef de url terug voor testen.
                 echo json_encode([
                     'success' => true,
                     'message' => 'Check je mailbox voor de inloglink!',
-                    'debug_link' => (defined('APP_ENV') && APP_ENV === 'development') ? $link : null
+                    'debug_link' => (defined('APP_ENV') && APP_ENV === 'development') ? $link : null,
+                    'debug_output' => $obContent
                 ]);
             } else {
                 throw new Exception('E-mailadres niet gevonden');
@@ -53,6 +56,7 @@ try {
             $user = $authService->verifyMagicLink($token);
             if ($user) {
                 $authService->startSession($user);
+                ob_get_clean();
                 echo json_encode(['success' => true, 'user' => $user]);
             } else {
                 throw new Exception('Ongeldige of verlopen link. Vraag een nieuwe aan.');
@@ -77,24 +81,33 @@ try {
                 }
 
                 if ($user) {
+                    ob_get_clean();
                     echo json_encode(['success' => true, 'user' => $user]);
                 } else {
+                    ob_get_clean();
                     echo json_encode(['success' => false]);
                 }
             } else {
+                ob_get_clean();
                 echo json_encode(['success' => false]);
             }
             break;
 
         case 'logout':
             AuthService::logout();
+            ob_get_clean();
             echo json_encode(['success' => true]);
             break;
 
         default:
             throw new Exception('Ongeldige actie');
     }
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     http_response_code(200);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    $obContent = ob_get_clean();
+    echo json_encode([
+        'success' => false, 
+        'error' => $e->getMessage(),
+        'debug_output' => $obContent
+    ]);
 }
