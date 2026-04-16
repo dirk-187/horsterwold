@@ -24,6 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMeterContext && document.getElementById('photo-screen').classList.contains('active')) {
             stopCamera();
             currentMeterContext = null;
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('test_scanner') === 'true') {
+                window.location.href = 'admin/';
+                return;
+            }
             showScreen('dashboard-screen');
         }
     });
@@ -36,8 +41,17 @@ function init() {
     // Check if there is a token in the URL (Magic Link return)
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || urlParams.get('t');
+    const isTestScannerMode = urlParams.get('test_scanner') === 'true';
 
-    if (token) {
+    if (isTestScannerMode) {
+        // Test mode setup
+        document.getElementById('scan-instruction-text').innerHTML = `Scanner Testmodus<br><span style="font-size: 0.8em; font-weight: normal; color: var(--text-muted);">(Foto wordt niet opgeslagen)</span>`;
+        const closeBtn = document.querySelector('.btn-camera-close');
+        if (closeBtn) closeBtn.title = "Terug naar Admin";
+        
+        startMeterFlow('test');
+        return; // Skip normal auth flow
+    } else if (token) {
         handleTokenVerification(token);
     } else {
         checkExistingSession();
@@ -147,6 +161,12 @@ function showScreen(screenId) {
 // (Removed duplicate startMeterFlow)
 
 function cancelMeterFlow() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('test_scanner') === 'true') {
+        window.location.href = 'admin/';
+        return;
+    }
+
     if (history.state && history.state.screen === 'photo-screen') {
         history.back(); // will trigger popstate
     } else {
@@ -455,7 +475,8 @@ function startStabilityCheck() {
 const meterNames = {
     water: 'Watermeter',
     gas: 'Gasmeter',
-    elec: 'Elektrameter'
+    elec: 'Elektrameter',
+    test: 'Testfoto'
 };
 
 async function startMeterFlow(type) {
@@ -485,6 +506,12 @@ async function confirmMeter() {
     const btnConfirm = document.querySelector('#verify-screen .btn-primary');
     const originalText = btnConfirm.textContent;
     
+    if (currentMeterContext === 'test') {
+        alert("Dit was een test. Resultaat was: " + val + ". Je wordt teruggestuurd naar de admin.");
+        window.location.href = 'admin/';
+        return;
+    }
+
     // Preparation for Database storage
     const imageData = document.getElementById('verify-image').src;
     const lotId = 142; // Fallback for Demo, should be extracted from session
