@@ -57,6 +57,18 @@ function copyToClipboard(text) {
     return false;
 }
 
+/**
+ * Formatteert een getal volgens de Nederlandse standaard (dot voor duizendtal, comma voor decimaal)
+ */
+function formatNumber(num, decimals = 1) {
+    if (num === null || num === undefined || isNaN(num)) return '—';
+    return Number(num).toLocaleString('nl-NL', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     // Stap 1: Check if er een token in de URL staat (admin magic link)
     const urlParams = new URLSearchParams(window.location.search);
@@ -384,10 +396,11 @@ function updateStats(serverStats = null) {
     document.getElementById('stat-afwijkingen').textContent= stats.afwijkingen || 0;
     document.getElementById('stat-approved').textContent   = stats.approved || 0;
     if (serverStats) {
-        if (serverStats.avg_gas !== undefined) document.getElementById('stat-avg-gas').textContent = serverStats.avg_gas;
-        if (serverStats.avg_water !== undefined) document.getElementById('stat-avg-water').textContent = serverStats.avg_water;
-        if (serverStats.avg_elec !== undefined) document.getElementById('stat-avg-elec').textContent = serverStats.avg_elec;
+        if (serverStats.avg_gas !== undefined) document.getElementById('stat-avg-gas').textContent = formatNumber(serverStats.avg_gas, 1);
+        if (serverStats.avg_water !== undefined) document.getElementById('stat-avg-water').textContent = formatNumber(serverStats.avg_water, 1);
+        if (serverStats.avg_elec !== undefined) document.getElementById('stat-avg-elec').textContent = formatNumber(serverStats.avg_elec, 0);
     }
+
 }
 
 // ================================================================
@@ -563,7 +576,8 @@ function renderTable(lots) {
             }
 
             const valSign = verbruik > 0 ? '+' : '';
-            const formattedVerbruik = verbruik.toFixed(unit === 'kWh' ? 0 : 1);
+            const decimals = (unit === 'kWh') ? 0 : 1;
+            const formattedVerbruik = formatNumber(verbruik, decimals);
             
             return `
                 <div class="consumption-box">
@@ -571,10 +585,11 @@ function renderTable(lots) {
                         <strong>${valSign}${formattedVerbruik}</strong>${devStr}
                     </div>
                     <div class="consumption-sub">
-                        ${newReadStr}
+                        ${formatNumber(newReadStr, decimals)}
                     </div>
                 </div>
             `;
+
         };
 
         tr.onclick = () => viewHistory(lot.id); // Maak de hele rij klikbaar
@@ -982,7 +997,8 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                     
                                     if (prevStand > 0) {
                                         const verbruik = Math.abs(val - prevStand);
-                                        verbruikStr = `+${verbruik.toFixed(unit === 'kWh' ? 0 : 1)}`;
+                                        const decimals = (unit === 'kWh' ? 0 : 1);
+                                        verbruikStr = `+${formatNumber(verbruik, decimals)}`;
                                         
                                         if (prevVerbruik > 0) {
                                             const devPerc = ((verbruik - prevVerbruik) / prevVerbruik) * 100;
@@ -996,7 +1012,7 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                         <div class="reading-grid">
                                             <div class="rg-val"><strong>${verbruikStr || '-'}</strong></div>
                                             <div class="rg-dev">${devStr}</div>
-                                            <div class="rg-abs"><small style="color:var(--text-muted)">${newReadStr}</small></div>
+                                            <div class="rg-abs"><small style="color:var(--text-muted)">${formatNumber(newReadStr, (unit === 'kWh' ? 0 : 1))}</small></div>
                                         </div>
                                     `;
                                 };
@@ -1066,7 +1082,7 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                     <small style="color:var(--text-muted)">${o.resident_name}</small>
                                 </td>
                                 <td class="text-right" data-label="Startstanden">
-                                    <small>G: ${o.start_gas || 0}<br>W: ${o.start_water || 0}<br>E: ${o.start_elec || 0}</small>
+                                    <small>G: ${formatNumber(o.start_gas, 1)}<br>W: ${formatNumber(o.start_water, 1)}<br>E: ${formatNumber(o.start_elec, 0)}</small>
                                 </td>
                                 <td class="text-right" data-label="Eindstanden">
                                     ${(() => {
@@ -1083,7 +1099,7 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                         if (latestApp) {
                                             return `
                                                 <div style="font-size:0.75rem; color:#34d399; font-weight:600;">Huidige stand:</div>
-                                                <small>G: ${latestApp.gas_new_reading}<br>W: ${latestApp.water_new_reading}<br>E: ${latestApp.electricity_new_reading}</small>
+                                                <small>G: ${formatNumber(latestApp.gas_new_reading, 1)}<br>W: ${formatNumber(latestApp.water_new_reading, 1)}<br>E: ${formatNumber(latestApp.electricity_new_reading, 0)}</small>
                                             `;
                                         }
 
@@ -1152,16 +1168,16 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                             <tr>
                                 <td data-label="Jaar">${h.period_name.replace('Jaarafrekening ', '')}</td>
                                 <td class="text-right" data-label="Gas Verbruik">
-                                    <strong>${gV.toFixed(1)} m³</strong>${devStr(gV, hPrev?.gas_new_reading, hPrev?.gas_prev_reading)}<br>
-                                    <small style="color:var(--text-muted)">${h.gas_new_reading}</small>
+                                    <strong>${formatNumber(gV, 1)} m³</strong>${devStr(gV, hPrev?.gas_new_reading, hPrev?.gas_prev_reading)}<br>
+                                    <small style="color:var(--text-muted)">${formatNumber(h.gas_new_reading, 1)}</small>
                                 </td>
                                 <td class="text-right" data-label="Water Verbruik">
-                                    <strong>${wV.toFixed(1)} m³</strong>${devStr(wV, hPrev?.water_new_reading, hPrev?.water_prev_reading)}<br>
-                                    <small style="color:var(--text-muted)">${h.water_new_reading}</small>
+                                    <strong>${formatNumber(wV, 1)} m³</strong>${devStr(wV, hPrev?.water_new_reading, hPrev?.water_prev_reading)}<br>
+                                    <small style="color:var(--text-muted)">${formatNumber(h.water_new_reading, 1)}</small>
                                 </td>
                                 <td class="text-right" data-label="Elek Verbruik">
-                                    <strong>${eV.toFixed(0)} kWh</strong>${devStr(eV, hPrev?.electricity_new_reading, hPrev?.electricity_prev_reading)}<br>
-                                    <small style="color:var(--text-muted)">${h.electricity_new_reading}</small>
+                                    <strong>${formatNumber(eV, 0)} kWh</strong>${devStr(eV, hPrev?.electricity_new_reading, hPrev?.electricity_prev_reading)}<br>
+                                    <small style="color:var(--text-muted)">${formatNumber(h.electricity_new_reading, 0)}</small>
                                 </td>
                             </tr>
                         `;
