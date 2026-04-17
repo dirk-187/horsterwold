@@ -103,6 +103,8 @@ class OcrService
         // Determine units/context to look for
         $targetUnits = ($meterType === 'elec') ? ['kwh', 'kw.h'] : ['m3', 'm³'];
 
+        $this->logOcrDebug("--- Starting Extraction for $meterType ---");
+
         // First pass: collect all unit locations
         foreach ($annotation->getPages() as $page) {
             foreach ($page->getBlocks() as $block) {
@@ -120,11 +122,13 @@ class OcrService
         }
 
         // Second pass: Traverse and find candidates
-        foreach ($annotation->getPages() as $page) {
+        foreach ($annotation->getPages() as $pageIdx => $page) {
             foreach ($page->getBlocks() as $block) {
-                foreach ($block->getParagraphs() as $paragraph) {
-                    $wordsInLine = [];
-                    foreach ($paragraph->getWords() as $word) {
+                foreach ($block->getParagraphs() as $paraIdx => $paragraph) {
+                    $wordsInPara = iterator_to_array($paragraph->getWords());
+                    $wordsWithMeta = [];
+                    
+                    foreach ($wordsInPara as $wordIdx => $word) {
                         $wordText = '';
                         $symbolsWithMeta = [];
                         foreach ($word->getSymbols() as $symbol) {
@@ -146,66 +150,59 @@ class OcrService
                             $wordText .= $char;
                         }
                         
-                        $wordsInLine[] = [
+                        $wordsWithMeta[] = [
                             'text' => $wordText,
                             'symbols' => $symbolsWithMeta,
-                            'box' => $word->getBoundingBox()
+                            'box' => $word->getBoundingBox(),
+                            'paraIdx' => $paraIdx,
+                            'wordIdx' => $wordIdx
                         ];
                     }
 
-                    // Process words in this line to find candidates
-                    $this->findCandidates($wordsInLine, $unitLocations, $allReadings, $meterType, $labels);
+                    // Process words in this paragraph to find candidates
+                    $this->findCandidates($wordsWithMeta, $unitLocations, $allReadings, $meterType, $labels, $wordsWithMeta);
                 }
             }
         }
 
-        // Sort Readings
-        if ($meterType === 'water') {
-            // Water: Prioritize largest area
-            usort($allReadings, function($a, $b) {
-                return $b['area'] <=> $a['area'];
-            });
-        } else {
-            // Gas/Elec: Prefer high unit proximity, then area
-            usort($allReadings, function($a, $b) {
-                if ($a['unit_proximity'] != $b['unit_proximity']) {
-                    return $a['unit_proximity'] <=> $b['unit_proximity'];
-                }
-                return $b['area'] <=> $a['area'];
-            });
-        }
+        // Sort Readings by Score
+        usort($allReadings, function($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
 
-        $readingResult = !empty($allReadings) ? $allReadings[0]['text'] : null;
-        if (!$readingResult) {
+        if (!empty($allReadings)) {
+            $best = $allReadings[0];
+            $this->logOcrDebug("Selected BEST candidate: " . $best['text'] . " with score " . $best['score']);
+            $readingResult = $best['text'];
+        } else {
+            $this->logOcrDebug("No candidates found, falling back to parseDigits");
             $readingResult = $this->parseDigits($annotation->getText(), $meterType);
         }
 
         return [
             'reading' => $readingResult,
-            'meter_number' => null // Meter numbers are no longer extracted
+            'meter_number' => null
         ];
     }
 
     /**
-     * Finds reading candidates in a line of words based on meter-specific rules
+     * Finds reading candidates and scores them based on meter-specific rules
      */
-    private function findCandidates(array $words, array $unitLocations, array &$allReadings, string $meterType, array $labels): void
+    private function findCandidates(array $words, array $unitLocations, array &$allReadings, string $meterType, array $labels, array $paragraphWords): void
     {
         $isGas = ($meterType === 'gas');
         $isWater = ($meterType === 'water');
         $isElec = ($meterType === 'elec');
 
-        foreach ($words as $word) {
+        foreach ($words as $wordIdx => $word) {
             $text = $word['text'];
-            
-            // Basic digit detection (allowing for dots/commas in LCD electricity)
             if (!preg_match('/\d+/', $text)) continue;
 
-            // Group symbols by height to ensure UNIFORM size
+            // Group symbols by height
             $groups = [];
             foreach ($word['symbols'] as $s) {
                 if (!ctype_digit($s['char']) && $s['char'] !== '.' && $s['char'] !== ',') continue;
-                if ($s['is_red']) continue; // EXCLUDE RED BACKGROUND/BORDER DIGITS
+                if ($s['is_red']) continue;
 
                 $found = false;
                 foreach ($groups as &$group) {
@@ -235,55 +232,62 @@ class OcrService
                 $cleanDigits = preg_replace('/[^0-9]/', '', $group['text']);
                 $numDigits = strlen($cleanDigits);
                 $isBlackBg = ($group['black_bg_count'] / $group['count']) > 0.5;
-
-                $isValid = false;
+                $hasDecimal = (strpos($group['text'], '.') !== false || strpos($group['text'], ',') !== false);
+                
+                $score = 0;
                 $finalText = $cleanDigits;
 
+                // Base scoring
+                if ($numDigits === 5) $score += 50;
+                if ($numDigits === 6) $score += 30; // 6 digits also common
+
+                // Background bonus
+                if ($isBlackBg) $score += 20;
+
+                // Proximity/Logical matching
+                $isNearUnit = false;
                 if ($isGas) {
-                    // Gas: exactly 5 digits, black background, same row as m3
-                    if ($numDigits === 5 && $isBlackBg) {
-                        $isValid = $this->isSameLineAs($group['box'], $unitLocations, 'm3');
+                    if ($this->isSameLineAs($group['box'], $unitLocations, 'm3')) {
+                        $score += 100;
+                        $isNearUnit = true;
                     }
                 } elseif ($isWater) {
-                    // Water: 5 digits, largest present, followed by m3
-                    if ($numDigits === 5) {
-                        $isValid = $this->isFollowedBy($group['box'], $unitLocations, 'm3');
+                    if ($this->isFollowedBy($group['box'], $unitLocations, 'm3')) {
+                        $score += 100;
+                        $isNearUnit = true;
                     }
                 } elseif ($isElec) {
-                    // Electricity Type 1: 5 digits, white on black, kWh to the right
-                    if ($numDigits === 5 && $isBlackBg) {
-                        $isValid = $this->isFollowedBy($group['box'], $unitLocations, 'kwh');
+                    if ($this->isFollowedBy($group['box'], $unitLocations, 'kwh')) {
+                        $score += 100;
+                        $isNearUnit = true;
                     }
-                    // Electricity Type 2: LCD, take digits before the dot
-                    if (!$isValid && strpos($group['text'], '.') !== false || strpos($group['text'], ',') !== false) {
+                    if ($hasDecimal) {
+                        $score += 40;
                         $parts = preg_split('/[.,]/', $group['text']);
-                        if (strlen($parts[0]) >= 4) {
-                            $finalText = $parts[0];
-                            $isValid = true;
-                        }
+                        if (strlen($parts[0]) >= 4) $finalText = $parts[0];
                     }
-                } else {
-                    // Unknown: Fallback to 5-7 digits
-                    if ($numDigits >= 5 && $numDigits <= 7) $isValid = true;
                 }
 
-                if ($isValid) {
-                    // Calculate area for prominence
+                // Exclusion (Red Flag)
+                if ($this->hasRedFlag($wordIdx, $paragraphWords)) {
+                    $score -= 500;
+                    $this->logOcrDebug("REJECTED candidate (Red Flag): " . $group['text']);
+                }
+
+                if ($score > 20) {
                     $v = $group['box']->getVertices();
                     $area = abs($v[1]->getX() - $v[0]->getX()) * abs($v[2]->getY() - $v[1]->getY());
-
-                    // Calculate unit proximity
-                    $minDist = 9999;
-                    foreach ($unitLocations as $u) {
-                        $dist = $this->getDistance($group['box'], $u['box']);
-                        if ($dist < $minDist) $minDist = $dist;
-                    }
+                    
+                    // Water prioritizes area
+                    if ($isWater) $score += ($area / 1000); 
 
                     $allReadings[] = [
                         'text' => $finalText,
+                        'score' => $score,
                         'area' => $area,
-                        'unit_proximity' => $minDist
+                        'unit_proximity' => 0 // Not strictly needed with new scoring
                     ];
+                    $this->logOcrDebug("Candidate: {$group['text']} -> Final: $finalText | Score: $score | BlackBG: " . ($isBlackBg?'Y':'N'));
                 }
             }
         }
@@ -341,7 +345,7 @@ class OcrService
      */
     private function isBlackBackground($box, string $imageContent): bool
     {
-        if (!extension_loaded('gd')) return true; // Fail safe
+        if (!extension_loaded('gd')) return true;
 
         try {
             $im = imagecreatefromstring($imageContent);
@@ -367,17 +371,40 @@ class OcrService
                     $b = $rgb & 0xFF;
 
                     $brightness = ($r + $g + $b) / 3;
-                    if ($brightness < 80) $darkPoints++;
+                    if ($brightness < 120) $darkPoints++; // Lenient threshold
                     $totalPoints++;
                 }
             }
 
             imagedestroy($im);
-            return ($totalPoints > 0) && ($darkPoints / $totalPoints) > 0.6;
+            return ($totalPoints > 0) && ($darkPoints / $totalPoints) > 0.5;
 
         } catch (Exception $e) {
             return true;
         }
+    }
+
+    /**
+     * Checks if a word is preceded by an exclusion keyword (e.g., "nr")
+     */
+    private function hasRedFlag(int $wordIdx, array $paragraphWords): bool
+    {
+        if ($wordIdx === 0) return false;
+        
+        $prevWord = strtolower(trim($paragraphWords[$wordIdx - 1]['text']));
+        $redFlags = ['nr', 'sn', 'no', 'serienr', 'n°', 'meter', 'no.', 'nr.', 'sn.'];
+        
+        foreach ($redFlags as $flag) {
+            if (strpos($prevWord, $flag) !== false) return true;
+        }
+        return false;
+    }
+
+    private function logOcrDebug(string $message): void
+    {
+        $logPath = __DIR__ . '/../logs/ocr_debug.log';
+        if (!is_dir(dirname($logPath))) mkdir(dirname($logPath), 0777, true);
+        file_put_contents($logPath, date('[Y-m-d H:i:s] ') . $message . PHP_EOL, FILE_APPEND);
     }
 
     /**
@@ -500,19 +527,10 @@ class OcrService
                 $message = "Dit lijkt geen elektrameter te zijn (geen kWh gevonden). Fotografeer de juiste meter.";
             }
         } elseif ($expectedType === 'water') {
-            $waterKeywords = ['water meter', 'gauge', 'circle', 'measuring instrument', 'dial', 'water', 'round'];
-            $foundKeyword = false;
-            foreach ($labels as $label) {
-                foreach ($waterKeywords as $kw) {
-                    if (strpos($label, $kw) !== false) {
-                        $foundKeyword = true;
-                        break 2;
-                    }
-                }
-            }
-            if (!$foundKeyword && strpos($allTextLower, 'water') === false && strpos($allTextLower, 'm3') === false) {
+            // Very lenient for water: check for ANY water-related keyword OR m3
+            if (strpos($allTextLower, 'water') === false && strpos($allTextLower, 'm3') === false && strpos($allText, 'm³') === false) {
                 $valid = false;
-                $message = "Dit lijkt geen watermeter te zijn (ronde vorm niet herkend). Fotografeer de juiste meter.";
+                $message = "Dit lijkt geen watermeter te zijn. Fotografeer de juiste meter.";
             }
         }
 
