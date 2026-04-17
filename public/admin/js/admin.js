@@ -2419,8 +2419,13 @@ async function loadInvoicingStats() {
                 document.getElementById('btn-start-batch-invoicing').disabled = false;
                 invoicingQueue = data.ready_lots; // Store for batch
             }
+        } else {
+            console.error('[loadInvoicingStats] API Error:', data.error);
+            listBody.innerHTML = `<tr><td colspan="3" class="table-empty">Fout: ${data.error || 'Onbekende fout'}</td></tr>`;
         }
     } catch (e) {
+        console.error('[loadInvoicingStats] Fetch Error:', e);
+        listBody.innerHTML = `<tr><td colspan="3" class="table-empty">Netwerkfout bij laden.</td></tr>`;
         showToast('Fout bij laden facturatiegegevens', 'error');
     }
 }

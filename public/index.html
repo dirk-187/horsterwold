@@ -170,11 +170,20 @@
                     <label for="ocr-result" style="text-align: center;">Uitgelezen waarde</label>
                     <input type="number" id="ocr-result" value="0" style="text-align: center; font-size: 1.5rem; font-weight: 700; color: var(--primary);" readonly>
                 </div>
+
+                <!-- OCR Validation Warning -->
+                <div id="ocr-warning-box" style="display: none; width: 100%; margin-top: 1rem; padding: 1rem; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.3); border-radius: 8px; color: #f87171; font-size: 0.9rem; text-align: center;">
+                    <div style="font-weight: 700; margin-bottom: 0.3rem;">⚠️ Let op</div>
+                    <div id="ocr-warning-message">Melding tekst hier...</div>
+                </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 1rem;">
-                <button class="btn btn-primary" onclick="confirmMeter()">
+                <button id="btn-confirm-meter" class="btn btn-primary" onclick="confirmMeter()">
                     Ja, verstuur
+                </button>
+                <button id="btn-override-ocr" class="btn" style="display: none; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem;" onclick="overrideOCR()">
+                    Toch gebruiken (testfase)
                 </button>
                 <button class="btn" style="background: var(--glass-bg); color: var(--text-main); border: 1px solid var(--glass-border);" onclick="retakePhoto()">
                     Opnieuw proberen

@@ -338,6 +338,9 @@ async function processOCR(imgDataUrl) {
         if (data.success) {
             document.getElementById('ocr-result').value = data.reading;
             document.getElementById('ocr-meter-number').value = data.meter_number || "Niet gedetecteerd";
+            
+            // Handle Validation
+            handleOCRValidation(data.validation || { valid: true, message: 'OK' });
         } else {
             console.warn("OCR fout:", data.error);
             // Fallback to manual check with placeholder if API is not yet set up
@@ -349,6 +352,37 @@ async function processOCR(imgDataUrl) {
     } finally {
         document.getElementById('ocr-result').placeholder = "0";
     }
+}
+
+/**
+ * Handle validation result from OCR
+ */
+function handleOCRValidation(validation) {
+    const warningBox = document.getElementById('ocr-warning-box');
+    const warningMsg = document.getElementById('ocr-warning-message');
+    const btnConfirm = document.getElementById('btn-confirm-meter');
+    const btnOverride = document.getElementById('btn-override-ocr');
+
+    if (!validation.valid) {
+        warningBox.style.display = 'block';
+        warningMsg.textContent = validation.message;
+        btnConfirm.style.display = 'none';
+        btnOverride.style.display = 'block';
+    } else {
+        warningBox.style.display = 'none';
+        btnConfirm.style.display = 'block';
+        btnOverride.style.display = 'none';
+    }
+}
+
+function overrideOCR() {
+    const warningBox = document.getElementById('ocr-warning-box');
+    const btnConfirm = document.getElementById('btn-confirm-meter');
+    const btnOverride = document.getElementById('btn-override-ocr');
+
+    warningBox.style.display = 'none';
+    btnConfirm.style.display = 'block';
+    btnOverride.style.display = 'none';
 }
 
 let stabilityCounter = 0;
@@ -484,6 +518,11 @@ async function startMeterFlow(type) {
     document.getElementById('scan-meter-type').textContent = meterNames[type].toLowerCase();
     document.getElementById('verify-meter-name').textContent = meterNames[type];
     
+    // Reset Validation UI
+    document.getElementById('ocr-warning-box').style.display = 'none';
+    document.getElementById('btn-confirm-meter').style.display = 'block';
+    document.getElementById('btn-override-ocr').style.display = 'none';
+
     // Add history state for hardware/browser back button
     history.pushState({ screen: 'photo-screen' }, 'Scanner', window.location.href);
     

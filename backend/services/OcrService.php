@@ -6,6 +6,8 @@
 namespace Horsterwold\Services;
 
 use Google\Cloud\Vision\V1\ImageAnnotatorClient;
+use Google\Cloud\Vision\V1\Feature;
+use Google\Cloud\Vision\V1\Feature\Type;
 use Exception;
 
 class OcrService
@@ -36,13 +38,25 @@ class OcrService
                 'credentials' => $this->keyFilePath
             ]);
 
-            // High-density text detection (better for small numbers)
-            $response = $imageAnnotator->documentTextDetection($imageContent);
+            // Request both Document Text Detection and Label Detection
+            $image = $imageContent;
+            $features = [
+                (new Feature())->setType(Type::DOCUMENT_TEXT_DETECTION),
+                (new Feature())->setType(Type::LABEL_DETECTION)
+            ];
+
+            $response = $imageAnnotator->annotateImage($image, $features);
             $fullAnnotation = $response->getFullTextAnnotation();
             
+            $labels = [];
+            foreach ($response->getLabelAnnotations() as $label) {
+                $labels[] = strtolower($label->getDescription());
+            }
+
             if (!$fullAnnotation) {
                 // Fallback to basic text detection if document detection fails
-                $response = $imageAnnotator->textDetection($imageContent);
+                $featuresFallback = [(new Feature())->setType(Type::TEXT_DETECTION)];
+                $response = $imageAnnotator->annotateImage($image, $featuresFallback);
                 $texts = $response->getTextAnnotations();
                 
                 if (empty($texts)) {
@@ -50,16 +64,21 @@ class OcrService
                     return null;
                 }
 
+                $allText = $texts[0]->getDescription();
                 $imageAnnotator->close();
-                return [
-                    'reading' => $this->parseDigits($texts[0]->getDescription()),
+                
+                $results = [
+                    'reading' => $this->parseDigits($allText),
                     'meter_number' => null
                 ];
+                $results['validation'] = $this->validateMeterType($allText, $labels, $meterType);
+                return $results;
             }
 
             $results = $this->extractMeterData($fullAnnotation, $imageContent, $meterType);
+            $results['validation'] = $this->validateMeterType($fullAnnotation->getText(), $labels, $meterType);
+            
             $imageAnnotator->close();
-
             return $results;
 
         } catch (Exception $e) {
@@ -308,11 +327,62 @@ class OcrService
         return null;
     }
 
+    /**
+     * Validates if the detected information matches the expected meter type
+     */
+    private function validateMeterType(string $allText, array $labels, string $expectedType): array
+    {
+        $allTextLower = strtolower($allText);
+        $valid = true;
+        $message = "OK";
+
+        if ($expectedType === 'gas') {
+            // Check for m3
+            if (strpos($allTextLower, 'm3') === false && strpos($allText, 'm³') === false) {
+                $valid = false;
+                $message = "Dit lijkt geen gasmeter te zijn (geen m3 gevonden). Fotografeer de juiste meter.";
+            }
+        } elseif ($expectedType === 'elec') {
+            // Check for kwh
+            if (strpos($allTextLower, 'kwh') === false && strpos($allTextLower, 'kw.h') === false) {
+                $valid = false;
+                $message = "Dit lijkt geen elektrameter te zijn (geen kWh gevonden). Fotografeer de juiste meter.";
+            }
+        } elseif ($expectedType === 'water') {
+            // Check for labels like water meter, gauge, or circle
+            $waterKeywords = ['water meter', 'gauge', 'circle', 'measuring instrument', 'dial', 'water'];
+            $foundKeyword = false;
+            foreach ($labels as $label) {
+                foreach ($waterKeywords as $kw) {
+                    if (strpos($label, $kw) !== false) {
+                        $foundKeyword = true;
+                        break 2;
+                    }
+                }
+            }
+            
+            // Also check text for "water" or "m3" (though m3 is shared with gas)
+            if (!$foundKeyword && strpos($allTextLower, 'water') === false && strpos($allTextLower, 'm3') === false && strpos($allText, 'm³') === false) {
+                $valid = false;
+                $message = "Dit lijkt geen watermeter te zijn. Fotografeer de juiste meter.";
+            }
+        }
+
+        return [
+            'valid' => $valid,
+            'message' => $message
+        ];
+    }
+
     private function getMockReading(): array
     {
         return [
             'reading' => (string)rand(10000, 99999),
-            'meter_number' => 'SN-' . rand(100000, 999999)
+            'meter_number' => 'SN-' . rand(100000, 999999),
+            'validation' => [
+                'valid' => true,
+                'message' => 'OK'
+            ]
         ];
     }
 }

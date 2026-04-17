@@ -55,7 +55,8 @@ try {
         'success' => true,
         'reading' => $ocrResult['reading'],
         'meter_number' => $ocrResult['meter_number'] ?? null,
-        'type' => $meterType
+        'type' => $meterType,
+        'validation' => $ocrResult['validation'] ?? ['valid' => true, 'message' => 'OK']
     ]);
 
 } catch (Exception $e) {

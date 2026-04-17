@@ -612,7 +612,8 @@ try {
                         reviewed_by = ?,
                         gas_consumption = ?,
                         water_consumption = ?,
-                        electricity_consumption = ?
+                        electricity_consumption = ?,
+                        occupancy_id = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
@@ -620,6 +621,7 @@ try {
                     $cons['gas'],
                     $cons['water'],
                     $cons['elec'],
+                    $reading['occupancy_id'],
                     $id
                 ]);
 
@@ -671,7 +673,19 @@ try {
             try {
                 $invoiceService = new InvoiceService();
                 foreach ($pendingReadings as $pr) {
-                    $preview = $invoiceService->calculatePreview($lotId, $activePeriodId);
+                    // Haal de reading op om de occupancy_id te weten
+                    $stmtR = $db->prepare("SELECT occupancy_id FROM readings WHERE id = ?");
+                    $stmtR->execute([$pr['id']]);
+                    $occId = $stmtR->fetchColumn();
+
+                    if (!$occId) {
+                        // Fallback naar actieve occupancy
+                        $stmtOcc = $db->prepare("SELECT id FROM lot_occupancy WHERE lot_id = ? AND is_active = 1 LIMIT 1");
+                        $stmtOcc->execute([$lotId]);
+                        $occId = $stmtOcc->fetchColumn();
+                    }
+
+                    $preview = $invoiceService->calculatePreview((int)$occId);
                     $cons = $preview['consumption'];
 
                     $upd = $db->prepare("
@@ -680,10 +694,11 @@ try {
                             reviewed_at = NOW(), 
                             gas_consumption = ?,
                             water_consumption = ?,
-                            electricity_consumption = ?
+                            electricity_consumption = ?,
+                            occupancy_id = ?
                         WHERE id = ?
                     ");
-                    $upd->execute([$cons['gas'], $cons['water'], $cons['elec'], $pr['id']]);
+                    $upd->execute([$cons['gas'], $cons['water'], $cons['elec'], $occId, $pr['id']]);
                 }
                 $db->commit();
                 echo json_encode(['success' => true]);
@@ -898,11 +913,11 @@ try {
                     (SELECT COUNT(*) FROM lots WHERE lot_type = 'bebouwd') as total_built
                 FROM lot_occupancy lo
                 JOIN lots l ON l.id = lo.lot_id
-                LEFT JOIN readings r ON r.occupancy_id = lo.id AND r.billing_period_id = :period_id
-                LEFT JOIN billing_results br ON br.occupancy_id = lo.id AND br.billing_period_id = :period_id
+                LEFT JOIN readings r ON r.occupancy_id = lo.id AND r.billing_period_id = :p1
+                LEFT JOIN billing_results br ON br.occupancy_id = lo.id AND br.billing_period_id = :p2
                 WHERE l.lot_type = 'bebouwd' AND lo.is_active = 1
             ");
-            $stmt->execute(['period_id' => $activePeriodId]);
+            $stmt->execute(['p1' => $activePeriodId, 'p2' => $activePeriodId]);
             $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
             // Get the list of occupancy records that are ready (approved reading but no billing result)
@@ -911,12 +926,12 @@ try {
                 SELECT lo.id as occupancy_id, l.id as lot_id, l.lot_number, lo.resident_name as name
                 FROM lot_occupancy lo
                 JOIN lots l ON l.id = lo.lot_id
-                JOIN readings r ON r.occupancy_id = lo.id AND r.billing_period_id = :period_id
-                LEFT JOIN billing_results br ON br.occupancy_id = lo.id AND br.billing_period_id = :period_id
+                JOIN readings r ON r.occupancy_id = lo.id AND r.billing_period_id = :p1
+                LEFT JOIN billing_results br ON br.occupancy_id = lo.id AND br.billing_period_id = :p2
                 WHERE l.lot_type = 'bebouwd' AND r.status = 'approved' AND br.id IS NULL
                 ORDER BY l.lot_number ASC
             ");
-            $stmtList->execute(['period_id' => $activePeriodId]);
+            $stmtList->execute(['p1' => $activePeriodId, 'p2' => $activePeriodId]);
             $readyLots = $stmtList->fetchAll(PDO::FETCH_ASSOC);
 
             echo json_encode(['success' => true, 'stats' => $stats, 'ready_lots' => $readyLots]);
