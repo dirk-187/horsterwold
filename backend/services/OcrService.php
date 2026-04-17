@@ -93,7 +93,7 @@ class OcrService
             throw new Exception($errorMsg);
         }
     }    /**
-     * Extracts meter reading from FullTextAnnotation based on meter-specific rules
+     * Extracts meter reading from FullTextAnnotation based on structural meter patterns
      */
     private function extractMeterData($annotation, string $imageContent, string $meterType, array $labels): array
     {
@@ -103,7 +103,7 @@ class OcrService
         // Determine units/context to look for
         $targetUnits = ($meterType === 'elec') ? ['kwh', 'kw.h'] : ['m3', 'm³'];
 
-        $this->logOcrDebug("--- Starting Extraction for $meterType ---");
+        $this->logOcrDebug("--- Starting Structural Extraction for $meterType ---");
 
         // First pass: collect all unit locations
         foreach ($annotation->getPages() as $page) {
@@ -121,12 +121,13 @@ class OcrService
             }
         }
 
-        // Second pass: Traverse and find candidates
+        // Second pass: Traverse and find candidates with structural metadata
         foreach ($annotation->getPages() as $pageIdx => $page) {
             foreach ($page->getBlocks() as $block) {
                 foreach ($block->getParagraphs() as $paraIdx => $paragraph) {
                     $wordsInPara = iterator_to_array($paragraph->getWords());
                     $wordsWithMeta = [];
+                    $allSymbolsInPara = [];
                     
                     foreach ($wordsInPara as $wordIdx => $word) {
                         $wordText = '';
@@ -139,14 +140,18 @@ class OcrService
                             $height = abs($vertices[2]->getY() - $vertices[1]->getY());
                             $isRed = $this->isRedOrRedBordered($box, $imageContent);
                             $isBlackBg = $this->isBlackBackground($box, $imageContent);
+                            $isWhiteBg = $this->isWhiteBackground($box, $imageContent);
 
-                            $symbolsWithMeta[] = [
+                            $meta = [
                                 'char' => $char,
                                 'height' => $height,
                                 'is_red' => $isRed,
                                 'is_black_bg' => $isBlackBg,
+                                'is_white_bg' => $isWhiteBg,
                                 'box' => $box
                             ];
+                            $symbolsWithMeta[] = $meta;
+                            $allSymbolsInPara[] = $meta;
                             $wordText .= $char;
                         }
                         
@@ -159,23 +164,23 @@ class OcrService
                         ];
                     }
 
-                    // Process words in this paragraph to find candidates
-                    $this->findCandidates($wordsWithMeta, $unitLocations, $allReadings, $meterType, $labels, $wordsWithMeta);
+                    // Process structural candidates in this paragraph
+                    $this->matchStructuralPatterns($allSymbolsInPara, $unitLocations, $allReadings, $meterType, $labels);
                 }
             }
         }
 
-        // Sort Readings by Score
+        // Sort Readings by Score (Structural matches get high scores)
         usort($allReadings, function($a, $b) {
             return $b['score'] <=> $a['score'];
         });
 
         if (!empty($allReadings)) {
             $best = $allReadings[0];
-            $this->logOcrDebug("Selected BEST candidate: " . $best['text'] . " with score " . $best['score']);
+            $this->logOcrDebug("Selected BEST structural candidate: " . $best['text'] . " with score " . $best['score']);
             $readingResult = $best['text'];
         } else {
-            $this->logOcrDebug("No candidates found, falling back to parseDigits");
+            $this->logOcrDebug("No structural candidates found, falling back to parseDigits");
             $readingResult = $this->parseDigits($annotation->getText(), $meterType);
         }
 
@@ -186,110 +191,101 @@ class OcrService
     }
 
     /**
-     * Finds reading candidates and scores them based on meter-specific rules
+     * Matches symbols against specific structural patterns (Gas, Water, Elec)
      */
-    private function findCandidates(array $words, array $unitLocations, array &$allReadings, string $meterType, array $labels, array $paragraphWords): void
+    private function matchStructuralPatterns(array $symbols, array $unitLocations, array &$allReadings, string $meterType, array $labels): void
     {
-        $isGas = ($meterType === 'gas');
-        $isWater = ($meterType === 'water');
-        $isElec = ($meterType === 'elec');
+        // Filter out non-digits from the structural sequence
+        $digitSymbols = array_values(array_filter($symbols, function($s) {
+            return preg_match('/^[0-9.,]$/', $s['char']);
+        }));
 
-        foreach ($words as $wordIdx => $word) {
-            $text = $word['text'];
-            if (!preg_match('/\d+/', $text)) continue;
+        $count = count($digitSymbols);
+        if ($count < 5) return;
 
-            // Group symbols by height
-            $groups = [];
-            foreach ($word['symbols'] as $s) {
-                if (!ctype_digit($s['char']) && $s['char'] !== '.' && $s['char'] !== ',') continue;
-                if ($s['is_red']) continue;
+        // Slide a window across the digits to find 5-8 digit sequences
+        for ($i = 0; $i <= $count - 5; $i++) {
+            for ($len = 5; $len <= 8 && ($i + $len) <= $count; $len++) {
+                $sequence = array_slice($digitSymbols, $i, $len);
+                $this->evaluateSequence($sequence, $unitLocations, $allReadings, $meterType, $labels);
+            }
+        }
+    }
 
-                $found = false;
-                foreach ($groups as &$group) {
-                    if (abs($s['height'] - $group['avg_height']) < ($group['avg_height'] * 0.15)) {
-                        $group['text'] .= $s['char'];
-                        $group['count']++;
-                        $group['total_height'] += $s['height'];
-                        $group['avg_height'] = $group['total_height'] / $group['count'];
-                        if ($s['is_black_bg']) $group['black_bg_count']++;
-                        $found = true;
-                        break;
-                    }
-                }
-                if (!$found) {
-                    $groups[] = [
-                        'text' => $s['char'],
-                        'count' => 1,
-                        'total_height' => $s['height'],
-                        'avg_height' => $s['height'],
-                        'black_bg_count' => $s['is_black_bg'] ? 1 : 0,
-                        'box' => $s['box']
-                    ];
+    /**
+     * Evaluates a specific sequence of digits against the meter-type rules
+     */
+    private function evaluateSequence(array $sequence, array $unitLocations, array &$allReadings, string $meterType, array $labels): void
+    {
+        $text = '';
+        $colors = '';
+        $totalHeight = 0;
+        foreach ($sequence as $s) {
+            $text .= $s['char'];
+            $colors .= ($s['is_red'] ? 'R' : ($s['is_black_bg'] ? 'B' : 'W'));
+            $totalHeight += $s['height'];
+        }
+        $avgHeight = $totalHeight / count($sequence);
+        $cleanDigits = preg_replace('/[^0-9]/', '', $text);
+        
+        $score = 0;
+        $finalValue = $cleanDigits;
+
+        // check height consistency
+        foreach ($sequence as $s) {
+            if (abs($s['height'] - $avgHeight) > ($avgHeight * 0.3)) return; // Too inconsistent
+        }
+
+        if ($meterType === 'gas') {
+            // Pattern: [B,B,B,B,B,R,R,R] (5 black, 3 red) - take first 5
+            if (strpos($colors, 'BBBBBRRR') === 0 && strlen($cleanDigits) >= 5) {
+                $score += 1000;
+                $finalValue = substr($cleanDigits, 0, 5);
+            } elseif (strpos($colors, 'BBBBB') === 0 && strlen($cleanDigits) >= 5) {
+                $score += 200; // Partial match
+                $finalValue = substr($cleanDigits, 0, 5);
+            }
+            if ($this->isSameLineAs($sequence[0]['box'], $unitLocations, 'm3')) $score += 100;
+
+        } elseif ($meterType === 'water') {
+            // Unimag Pattern: [B,B,B,B,B,R,R,R] - take 5 black
+            if (strpos($colors, 'BBBBBRRR') === 0 && strlen($cleanDigits) >= 5) {
+                $score += 1000;
+                $finalValue = substr($cleanDigits, 0, 5);
+            }
+            // Standard Pattern: 5 digits in white raster + m3
+            $whiteCount = 0;
+            foreach ($sequence as $s) if ($s['is_white_bg']) $whiteCount++;
+            if ($whiteCount >= 5 && strlen($cleanDigits) == 5) {
+                $score += 800;
+            }
+            if ($this->isFollowedBy($sequence[count($sequence)-1]['box'], $unitLocations, 'm3')) $score += 200;
+
+        } elseif ($meterType === 'elec') {
+            // Type 1: Analog [B,B,B,B,B,R] - 5 black, 1 red
+            if (strpos($colors, 'BBBBBR') === 0 && strlen($cleanDigits) >= 5) {
+                $score += 1000;
+                $finalValue = substr($cleanDigits, 0, 5);
+            }
+            // Type 2: LCD - Consistent size before point
+            if (strpos($text, '.') !== false || strpos($text, ',') !== false) {
+                $parts = preg_split('/[.,]/', $text);
+                if (strlen($parts[0]) >= 5) {
+                    $score += 900;
+                    $finalValue = $parts[0];
                 }
             }
+            if ($this->isFollowedBy($sequence[count($sequence)-1]['box'], $unitLocations, 'kwh')) $score += 200;
+        }
 
-            foreach ($groups as $group) {
-                $cleanDigits = preg_replace('/[^0-9]/', '', $group['text']);
-                $numDigits = strlen($cleanDigits);
-                $isBlackBg = ($group['black_bg_count'] / $group['count']) > 0.5;
-                $hasDecimal = (strpos($group['text'], '.') !== false || strpos($group['text'], ',') !== false);
-                
-                $score = 0;
-                $finalText = $cleanDigits;
-
-                // Base scoring
-                if ($numDigits === 5) $score += 50;
-                if ($numDigits === 6) $score += 30; // 6 digits also common
-
-                // Background bonus
-                if ($isBlackBg) $score += 20;
-
-                // Proximity/Logical matching
-                $isNearUnit = false;
-                if ($isGas) {
-                    if ($this->isSameLineAs($group['box'], $unitLocations, 'm3')) {
-                        $score += 100;
-                        $isNearUnit = true;
-                    }
-                } elseif ($isWater) {
-                    if ($this->isFollowedBy($group['box'], $unitLocations, 'm3')) {
-                        $score += 100;
-                        $isNearUnit = true;
-                    }
-                } elseif ($isElec) {
-                    if ($this->isFollowedBy($group['box'], $unitLocations, 'kwh')) {
-                        $score += 100;
-                        $isNearUnit = true;
-                    }
-                    if ($hasDecimal) {
-                        $score += 40;
-                        $parts = preg_split('/[.,]/', $group['text']);
-                        if (strlen($parts[0]) >= 4) $finalText = $parts[0];
-                    }
-                }
-
-                // Exclusion (Red Flag)
-                if ($this->hasRedFlag($wordIdx, $paragraphWords)) {
-                    $score -= 500;
-                    $this->logOcrDebug("REJECTED candidate (Red Flag): " . $group['text']);
-                }
-
-                if ($score > 20) {
-                    $v = $group['box']->getVertices();
-                    $area = abs($v[1]->getX() - $v[0]->getX()) * abs($v[2]->getY() - $v[1]->getY());
-                    
-                    // Water prioritizes area
-                    if ($isWater) $score += ($area / 1000); 
-
-                    $allReadings[] = [
-                        'text' => $finalText,
-                        'score' => $score,
-                        'area' => $area,
-                        'unit_proximity' => 0 // Not strictly needed with new scoring
-                    ];
-                    $this->logOcrDebug("Candidate: {$group['text']} -> Final: $finalText | Score: $score | BlackBG: " . ($isBlackBg?'Y':'N'));
-                }
-            }
+        if ($score > 0) {
+            $allReadings[] = [
+                'text' => $finalValue,
+                'score' => $score,
+                'pattern' => $colors,
+                'raw' => $text
+            ];
+            $this->logOcrDebug("Pattern Candidate: $text | Pattern: $colors | Score: $score | Final: $finalValue");
         }
     }
 
@@ -316,16 +312,18 @@ class OcrService
             $redCount = 0;
             $totalPoints = 0;
             
-            // Sample points in the bounding box
-            for ($x = max(0, $x1); $x < min($width, $x2); $x += max(1, ($x2-$x1)/8)) {
-                for ($y = max(0, $y1); $y < min($height, $y2); $y += max(1, ($y2-$y1)/8)) {
+            // Sample points in and around the bounding box to catch borders
+            $stepX = max(1, ($x2-$x1)/10);
+            $stepY = max(1, ($y2-$y1)/10);
+
+            for ($x = max(0, $x1 - 2); $x < min($width, $x2 + 2); $x += $stepX) {
+                for ($y = max(0, $y1 - 2); $y < min($height, $y2 + 2); $y += $stepY) {
                     $rgb = imagecolorat($im, (int)$x, (int)$y);
                     $r = ($rgb >> 16) & 0xFF;
                     $g = ($rgb >> 8) & 0xFF;
                     $b = $rgb & 0xFF;
 
-                    // Red detection: R is significantly higher than G and B
-                    if ($r > 130 && $r > $g + 50 && $r > $b + 50) {
+                    if ($r > 130 && $r > $g + 40 && $r > $b + 40) {
                         $redCount++;
                     }
                     $totalPoints++;
@@ -333,7 +331,7 @@ class OcrService
             }
 
             imagedestroy($im);
-            return ($totalPoints > 0) && ($redCount / $totalPoints) > 0.15; // Lower threshold to catch borders
+            return ($totalPoints > 0) && ($redCount / $totalPoints) > 0.12; 
 
         } catch (Exception $e) {
             return false;
@@ -371,7 +369,7 @@ class OcrService
                     $b = $rgb & 0xFF;
 
                     $brightness = ($r + $g + $b) / 3;
-                    if ($brightness < 120) $darkPoints++; // Lenient threshold
+                    if ($brightness < 110) $darkPoints++; 
                     $totalPoints++;
                 }
             }
@@ -381,6 +379,50 @@ class OcrService
 
         } catch (Exception $e) {
             return true;
+        }
+    }
+
+    /**
+     * Detects if the background is white (for water meter rasters)
+     */
+    private function isWhiteBackground($box, string $imageContent): bool
+    {
+        if (!extension_loaded('gd')) return false;
+
+        try {
+            $im = imagecreatefromstring($imageContent);
+            if (!$im) return false;
+
+            $v = $box->getVertices();
+            $x1 = (int)min($v[0]->getX(), $v[3]->getX());
+            $y1 = (int)min($v[0]->getY(), $v[1]->getY());
+            $x2 = (int)max($v[1]->getX(), $v[2]->getX());
+            $y2 = (int)max($v[2]->getY(), $v[3]->getY());
+
+            $width = imagesx($im);
+            $height = imagesy($im);
+
+            $whitePoints = 0;
+            $totalPoints = 0;
+            
+            for ($x = max(0, $x1); $x < min($width, $x2); $x += max(1, ($x2-$x1)/8)) {
+                for ($y = max(0, $y1); $y < min($height, $y2); $y += max(1, ($y2-$y1)/8)) {
+                    $rgb = imagecolorat($im, (int)$x, (int)$y);
+                    $r = ($rgb >> 16) & 0xFF;
+                    $g = ($rgb >> 8) & 0xFF;
+                    $b = $rgb & 0xFF;
+
+                    $brightness = ($r + $g + $b) / 3;
+                    if ($brightness > 200) $whitePoints++; 
+                    $totalPoints++;
+                }
+            }
+
+            imagedestroy($im);
+            return ($totalPoints > 0) && ($whitePoints / $totalPoints) > 0.6;
+
+        } catch (Exception $e) {
+            return false;
         }
     }
 
@@ -485,7 +527,7 @@ class OcrService
                 $uleftx = min($uv[0]->getX(), $uv[3]->getX());
                 
                 // Same line and to the right
-                if (abs($centerY - $ucentery) < ($height * 0.8) && ($uleftx >= $rightX - ($height * 2))) {
+                if (abs($centerY - $ucentery) < ($height * 1.5) && ($uleftx >= $rightX - ($height * 2))) {
                     return true;
                 }
             }
