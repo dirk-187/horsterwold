@@ -86,6 +86,7 @@ try {
                     l.has_water,
                     l.has_electricity,
                     l.allow_direct_debit,
+                    l.monthly_advance,
                     l.notes,
                     -- Gebruiker / magic link (uit lot-tabel)
                     l.magic_link_token,
@@ -104,6 +105,10 @@ try {
                     r.gas_new_reading               AS curr_gas_reading,
                     r.water_new_reading             AS curr_water_reading,
                     r.electricity_new_reading       AS curr_elec_reading,
+                    r.image_url,
+                    r.image_url_gas,
+                    r.image_url_water,
+                    r.image_url_elec,
                     r.reading_date,
                     r.created_at   AS reading_submitted_at,
                     -- Historie data voor trend (vorig jaar)
@@ -297,6 +302,8 @@ try {
             $input = json_decode(file_get_contents('php://input'), true);
             $lotIds = $input['lot_ids'] ?? [];
             $scenario = $input['scenario'] ?? 'jaarafrekening';
+            $customBody = $input['custom_body'] ?? '';
+            $customExpiry = $input['custom_expiry'] ?? null; // YYYY-MM-DD
 
             if (empty($lotIds) || !is_array($lotIds)) {
                 throw new Exception('Geen kavels geselecteerd');
@@ -307,7 +314,14 @@ try {
 
             foreach ($lotIds as $lotId) {
                 $lotId = (int)$lotId;
-                $token = $authService->generateTokenForLot($lotId);
+                
+                $expiryDays = 7;
+                if ($customExpiry) {
+                    $expiryDays = (int)round((strtotime($customExpiry) - time()) / 86400);
+                    if ($expiryDays < 1) $expiryDays = 1;
+                }
+                
+                $token = $authService->generateTokenForLot($lotId, $expiryDays);
 
                 // Gegevens ophalen van actieve bewoner
                 $stmtUserInfo = $db->prepare("
@@ -343,7 +357,8 @@ try {
 
                     $mailOk = false;
                     if ($l['email'] && !$skipMail) {
-                        $mailOk = $mailService->sendInvitationEmail($l['email'], $l['name'] ?? 'Bewoner', $l['lot_number'], $link);
+                        $expiryStr = $customExpiry ?: date('Y-m-d', strtotime("+$expiryDays days"));
+                        $mailOk = $mailService->sendInvitationEmail($l['email'], $l['name'] ?? 'Bewoner', $l['lot_number'], $link, $expiryStr, $scenario, $customBody);
                         if ($mailOk) $results['mails_sent']++;
                         else {
                             error_log("Failed to send email to " . $l['email'] . " for lot " . $l['lot_number']);
@@ -864,14 +879,14 @@ try {
                     vast_gas_total, vast_water_total, vast_electricity_total,
                     vve_total, erfpacht_total,
                     vat_rate, vat_amount, correction_amount, correction_reason,
-                    subtotal, settlement_amount, calculated_at
+                    subtotal, previously_invoiced, settlement_amount, calculated_at
                 ) VALUES (
                     ?, ?, ?, ?,
                     ?, ?, ?, ?,
                     ?, ?, ?,
                     ?, ?,
                     ?, ?, ?, ?,
-                    ?, ?, NOW()
+                    ?, ?, ?, NOW()
                 )
                 ON DUPLICATE KEY UPDATE 
                     gas_cost=VALUES(gas_cost), water_cost=VALUES(water_cost),
@@ -881,6 +896,9 @@ try {
                     occupancy_id=VALUES(occupancy_id)
             ");
 
+            $previouslyInvoiced = round($p['summary']['period_months'] * ($p['lot']['monthly_advance'] ?? 0), 2);
+            $settlementAmount = round($p['summary']['total'] - $previouslyInvoiced, 2);
+
             $stmt->execute([
                 $p['reading_id'], $p['lot']['id'], $p['occupancy']['id'], $p['period_id'],
                 $p['costs']['gas'], $p['costs']['water'], $p['costs']['elec'], $p['costs']['solar_credit'],
@@ -888,7 +906,7 @@ try {
                 $p['fixed']['vve'], $p['fixed']['erfpacht'],
                 $p['summary']['vat_rate'], $p['summary']['vat_amount'], 
                 $p['summary']['correction'], $p['summary']['correction_reason'],
-                $p['summary']['total'], $p['summary']['total']
+                $p['summary']['total'], $previouslyInvoiced, $settlementAmount
             ]);
 
             echo json_encode(['success' => true]);
@@ -1002,6 +1020,71 @@ try {
             echo json_encode(['success' => $success, 'filename' => $pdfFilename]);
             break;
 
+        case 'send-all-invoices':
+            set_time_limit(0); // Voorkom timeout bij veel mails
+            
+            // 1. Zoek alle kavels die een factuurberekening hebben maar nog niet verstuurd zijn
+            $stmt = $db->prepare("
+                SELECT br.lot_id, br.occupancy_id, br.billing_period_id, br.correction_amount, br.correction_reason,
+                       l.lot_number, lo.resident_email as user_email
+                FROM billing_results br
+                JOIN lots l ON br.lot_id = l.id
+                JOIN lot_occupancy lo ON br.occupancy_id = lo.id
+                WHERE br.billing_period_id = ? AND br.sent_at IS NULL
+            ");
+            $stmt->execute([$activePeriodId]);
+            $toSend = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($toSend)) {
+                echo json_encode(['success' => true, 'count' => 0]);
+                break;
+            }
+
+            $invoiceService = new InvoiceService();
+            $pdfService = new PdfService();
+            $mailService = new MailService();
+            
+            // Tarieven ophalen (één keer buiten de loop)
+            $stmtT = $db->prepare("SELECT * FROM tariffs WHERE billing_period_id = ?");
+            $stmtT->execute([$activePeriodId]);
+            $tariffs = $stmtT->fetch(PDO::FETCH_ASSOC);
+
+            $count = 0;
+            $errors = [];
+
+            foreach ($toSend as $billing) {
+                try {
+                    // Data voor PDF
+                    $fullData = $invoiceService->calculatePreview((int)$billing['occupancy_id'], (float)$billing['correction_amount'], $billing['correction_reason']);
+                    $fullData['tariffs'] = $tariffs;
+
+                    // Genereer PDF
+                    $pdfFilename = $pdfService->generateInvoicePdf($fullData);
+                    $pdfPath = __DIR__ . "/../../public/uploads/invoices/" . $pdfFilename;
+
+                    // Verstuur Mail
+                    $mailSent = $mailService->sendInvoiceEmail($billing['user_email'], $pdfPath, $billing['lot_number']);
+
+                    if ($mailSent) {
+                        $upd = $db->prepare("UPDATE billing_results SET sent_at = NOW() WHERE lot_id = ? AND billing_period_id = ?");
+                        $upd->execute([$billing['lot_id'], $activePeriodId]);
+                        $count++;
+                    } else {
+                        $errors[] = "Kavel #{$billing['lot_number']}: Mail kon niet worden verstuurd.";
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Kavel #{$billing['lot_number']}: " . $e->getMessage();
+                }
+            }
+
+            echo json_encode([
+                'success' => true, 
+                'count' => $count, 
+                'total' => count($toSend),
+                'errors' => $errors
+            ]);
+            break;
+
         case 'update-lot-settings':
             $input = json_decode(file_get_contents('php://input'), true);
             $lotId = (int)($input['lot_id'] ?? 0);
@@ -1013,6 +1096,80 @@ try {
             $stmt->execute([$allowDirectDebit, $lotId]);
 
             echo json_encode(['success' => true]);
+            break;
+
+        case 'update-lot-advance':
+            $input = json_decode(file_get_contents('php://input'), true);
+            $lotId = (int)($input['lot_id'] ?? 0);
+            $amount = (float)($input['amount'] ?? 0);
+
+            if (!$lotId) throw new Exception('Geen kavel opgegeven');
+
+            $stmt = $db->prepare("UPDATE lots SET monthly_advance = ? WHERE id = ?");
+            $stmt->execute([$amount, $lotId]);
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'calc-advance-new-year':
+            // Berekent voor elk kavel het nieuwe voorschot op basis van verbruik afgelopen jaar
+            $stmt = $db->prepare("
+                SELECT 
+                    l.id, l.lot_number, l.lot_type,
+                    lo.resident_name,
+                    COALESCE(SUM(r.gas_consumption), 0) as total_gas,
+                    COALESCE(SUM(r.water_consumption), 0) as total_water,
+                    COALESCE(SUM(r.electricity_consumption), 0) as total_elec,
+                    COALESCE(SUM(r.period_months), 0) as total_months
+                FROM lots l
+                LEFT JOIN lot_occupancy lo ON lo.lot_id = l.id AND lo.is_active = 1
+                LEFT JOIN readings r ON r.lot_id = l.id AND r.billing_period_id = ? AND r.status = 'approved'
+                WHERE l.lot_type = 'bebouwd'
+                GROUP BY l.id
+            ");
+            $stmt->execute([$activePeriodId]);
+            $usage = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Haal tarieven op
+            $stmtT = $db->prepare("SELECT * FROM tariffs WHERE billing_period_id = ?");
+            $stmtT->execute([$activePeriodId]);
+            $tariffs = $stmtT->fetch(PDO::FETCH_ASSOC);
+
+            // Haal vaste lasten op
+            $stmtF = $db->prepare("SELECT * FROM fixed_costs_templates WHERE billing_period_id = ? AND lot_type = 'bebouwd'");
+            $stmtF->execute([$activePeriodId]);
+            $fixed = $stmtF->fetch(PDO::FETCH_ASSOC);
+
+            $results = [];
+            foreach ($usage as $u) {
+                $months = max(1, (int)$u['total_months']);
+                
+                // Verbruikskosten per maand
+                $mGas = ($u['total_gas'] / $months) * $tariffs['gas_price_per_m3'];
+                $mWater = ($u['total_water'] / $months) * $tariffs['water_price_per_m3'];
+                $mElec = ($u['total_elec'] / $months) * $tariffs['electricity_price_per_kwh'];
+                
+                // Vaste lasten per maand
+                $mFixed = $fixed['vast_gas_per_month'] + $fixed['vast_water_per_month'] + $fixed['vast_electricity_per_month'];
+                $mFixed += ($fixed['vve_per_year'] / 12) + ($fixed['erfpacht_per_year'] / 12);
+                
+                $newAdvance = round($mGas + $mWater + $mElec + $mFixed, 2);
+                
+                $results[] = [
+                    'lot_id' => $u['id'],
+                    'lot_number' => $u['lot_number'],
+                    'resident_name' => $u['resident_name'] ?? 'Onbekend',
+                    'new_advance' => $newAdvance,
+                    'costs' => [
+                        'gas' => round($mGas + $fixed['vast_gas_per_month'], 2),
+                        'water' => round($mWater + $fixed['vast_water_per_month'], 2),
+                        'elec' => round($mElec + $fixed['vast_electricity_per_month'], 2),
+                        'fixed' => round(($fixed['vve_per_year'] / 12) + ($fixed['erfpacht_per_year'] / 12), 2)
+                    ]
+                ];
+            }
+
+            echo json_encode(['success' => true, 'proposals' => $results]);
             break;
 
         case 'update-payment-status':

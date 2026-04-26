@@ -18,10 +18,10 @@ class AuthService
     /**
      * Genereer een directe inlogtoken voor een specifieke kavel door deze in de kavel-tabel op te slaan.
      */
-    public function generateTokenForLot(int $lotId): ?string
+    public function generateTokenForLot(int $lotId, int $days = 7): ?string
     {
         $token   = bin2hex(random_bytes(MAGIC_LINK_TOKEN_LENGTH / 2));
-        $expires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+        $expires = date('Y-m-d H:i:s', strtotime("+$days days"));
 
         $stmt = $this->db->prepare(
             'UPDATE lots SET magic_link_token = ?, token_expires_at = ? WHERE id = ?'

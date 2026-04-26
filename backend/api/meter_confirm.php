@@ -60,7 +60,8 @@ try {
         'type'            => $type,
         'reading'         => $reading,
         'image_url'       => $storageResult['url'],
-        'exif_timestamp'  => $storageResult['exif_date']
+        'exif_timestamp'  => $storageResult['exif_date'],
+        'is_manual_correction' => (int)($input['is_manual_correction'] ?? 0)
     ]);
 
     echo json_encode([

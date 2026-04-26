@@ -250,6 +250,9 @@ function showAdminDashboard() {
     const btnStartBatch = document.getElementById('btn-start-batch-invoicing');
     if (btnStartBatch) btnStartBatch.addEventListener('click', startBatchInvoicing);
 
+    const btnSendAll = document.getElementById('btn-send-all-invoices');
+    if (btnSendAll) btnSendAll.addEventListener('click', sendAllInvoices);
+
     // Modals
     const modalClose = document.getElementById('modal-close');
     if (modalClose) modalClose.addEventListener('click', closeModal);
@@ -335,13 +338,17 @@ function showAdminDashboard() {
         });
     }
     
-    const adminCaptureBtn = document.getElementById('btn-admin-scanner-capture');
-    if (adminCaptureBtn) adminCaptureBtn.addEventListener('click', captureAdminPhoto);
+    
+    const btnCalcAdvances = document.getElementById('btn-calc-advances');
+    if (btnCalcAdvances) btnCalcAdvances.addEventListener('click', calcNewYearAdvance);
+
+    const btnSaveAllAdvances = document.getElementById('btn-save-all-advances');
+    if (btnSaveAllAdvances) btnSaveAllAdvances.addEventListener('click', saveAllAdvances);
 }
 
 async function adminLogout() {
     await fetch('../../backend/api/admin.php?action=logout').catch(() => {});
-    showAdminLogin('Je bent uitgelogd.');
+    window.location.href = '../logout.html';
 }
 
 // ================================================================
@@ -545,7 +552,17 @@ function renderTable(lots) {
                 }
             }
 
-            // 2. Details knop (altijd)
+            // 2. Herinnering knop (alleen als er al een mail is verstuurd en er nog geen actie is ondernomen of afgekeurd is)
+            const needsReminder = lot.magic_link_status !== 'not_sent' && (!lot.reading_status || lot.reading_status === 'rejected');
+            if (needsReminder) {
+                actionButtons += `
+                    <button class="action-btn btn-pulse" title="Verstuur herinnering (alarmbel)" style="color:#fff; background: #f59e0b; border: 1px solid #d97706; border-radius: 8px; margin: 0 4px; padding: 0.5rem;" onclick="event.stopPropagation(); openMailComposeModal(${lot.id}, 'herinnering')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:1.3em; height:1.3em;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    </button>
+                `;
+            }
+
+            // 3. Details knop (altijd)
             actionButtons += `
                 <button class="action-btn btn-detail" title="Details & Historie" onclick="event.stopPropagation(); viewHistory(${lot.id})">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
@@ -561,8 +578,20 @@ function renderTable(lots) {
             
             if (isNaN(val) || isNaN(baseline)) return '-';
             
-            const verbruik = Math.abs(val - baseline);
-            const prevVerbruik = Math.abs(baseline - prevStart);
+            let verbruik;
+            if (val < baseline) {
+                // Rollover logica
+                verbruik = (99999 - baseline) + val;
+            } else {
+                verbruik = val - baseline;
+            }
+            
+            let prevVerbruik;
+            if (baseline < prevStart) {
+                prevVerbruik = (99999 - prevStart) + baseline;
+            } else {
+                prevVerbruik = baseline - prevStart;
+            }
             
             let devStr = '';
             if (prevVerbruik > 0) {
@@ -634,8 +663,19 @@ function checkLotAbnormality(lot, maxDev) {
         
         if (isNaN(val) || isNaN(baseline)) continue;
 
-        const verbruik = Math.abs(val - baseline);
-        const prevVerbruik = Math.abs(baseline - prevStart);
+        let verbruik;
+        if (val < baseline) {
+            verbruik = (99999 - baseline) + val;
+        } else {
+            verbruik = val - baseline;
+        }
+
+        let prevVerbruik;
+        if (baseline < prevStart) {
+            prevVerbruik = (99999 - prevStart) + baseline;
+        } else {
+            prevVerbruik = baseline - prevStart;
+        }
 
         if (prevVerbruik > 0) {
             const devPerc = ((verbruik - prevVerbruik) / prevVerbruik) * 100;
@@ -654,80 +694,94 @@ function checkLotAbnormality(lot, maxDev) {
 // ================================================================
 
 async function sendSingleLink(lotId, scenario = 'jaarafrekening') {
-        const lot = allLots.find(l => l.id == lotId);
-    if (!lot) {
-        console.error('[sendSingleLink] ❌ Kavel niet gevonden! lotId:', lotId, '\nIDs:', allLots.map(l => l.id));
-        showToast('Fout: kavel niet gevonden. Herlaad de pagina.', 'error');
-        return;
+    openMailComposeModal(lotId, scenario);
+}
+
+function openMailComposeModal(lotId, scenario = 'jaarafrekening') {
+    const lot = allLots.find(l => l.id == lotId);
+    if (!lot) return;
+
+    const modal = document.getElementById('modal-mail-compose');
+    const form = document.getElementById('form-mail-compose');
+    
+    document.getElementById('mc-lot-id').value = lotId;
+    document.getElementById('mc-scenario').value = scenario;
+    document.getElementById('mc-recipient').value = `${lot.user_name || 'Bewoner'} (${lot.user_email || 'geen mail'})`;
+    
+    // Default expiry: vandaag + 7 dagen
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 7);
+    document.getElementById('mc-expiry-date').value = expiryDate.toISOString().split('T')[0];
+
+    // Default body gebaseerd op scenario (wordt onder de knop ingevoegd)
+    let body = "";
+    if (scenario === 'herinnering') {
+        document.getElementById('mail-compose-title').textContent = '🔔 Herinnering Versturen';
+        body = `LET OP: De meterstanden moeten voor {expiry} verzonden zijn. Wanneer dat niet het geval is, worden er administratiekosten in rekening gebracht.`;
+    } else if (scenario === 'verhuizing') {
+        document.getElementById('mail-compose-title').textContent = '📦 Verhuizing Mail';
+        body = `In verband met uw verhuizing verzoeken wij u de laatste meterstanden door te geven. Let op: deze link is geldig tot {expiry}.`;
+    } else {
+        document.getElementById('mail-compose-title').textContent = '📧 Uitnodiging Versturen';
+        body = `Let op: deze link is geldig tot {expiry}.`;
     }
     
-    let confirmTitle = 'Uitnodiging versturen';
-    let confirmMsg = `Weet je zeker dat je een uitnodigingsmail wilt sturen naar Kavel #${lot.lot_number} (${lot.user_email || 'geen mail'})?`;
+    document.getElementById('mc-body').value = body;
+    toggleModal('modal-mail-compose', true);
+}
+
+// Event handler voor het verzenden van de samengestelde mail
+document.getElementById('form-mail-compose')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
     
-    if (scenario === 'verhuizing') {
-        confirmTitle = '⚠️ Verhuizing: Mail Versturen';
-        confirmMsg = `LET OP: Hiermee stuur je een verhuis-uitnodiging. De huidige bewoner wordt direct op INACTIEF gezet na het versturen. Doorgaan?`;
-    }
+    const lotId = document.getElementById('mc-lot-id').value;
+    const scenario = document.getElementById('mc-scenario').value;
+    const customBody = document.getElementById('mc-body').value;
+    const customExpiry = document.getElementById('mc-expiry-date').value;
+    
+    const lot = allLots.find(l => l.id == lotId);
+    if (!lot) return;
 
-    const bodyData = { lot_ids: [lotId], scenario: scenario };
-    console.log('[sendSingleLink] Sending request:', bodyData);
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⌛ Bezig...';
 
-        confirmDialog(confirmTitle, confirmMsg, async () => {
-                console.error('[sendSingleLink] ✅ Bevestigen geklikt, fetch starten...');
-        try {
-            const response = await fetch('../../backend/api/admin.php?action=send-magic-link-selected', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyData)
-            });
-            
-            
-            if (!response.ok) {
-                const text = await response.text();
-                console.error('[sendSingleLink] ❌ Non-OK response:', response.status, text.substring(0, 500));
-                throw new Error(`Server fout (${response.status}): ${text.substring(0, 100)}`);
-            }
+    try {
+        const bodyData = { 
+            lot_ids: [lotId], 
+            scenario: scenario,
+            custom_body: customBody,
+            custom_expiry: customExpiry
+        };
 
-            const rawText = await response.text();
-            
-            let data;
-            try {
-                data = JSON.parse(rawText);
-            } catch (jsonErr) {
-                console.error('[sendSingleLink] ❌ JSON parse mislukt. Raw response:', rawText.substring(0, 500));
-                throw new Error('Server stuurde geen geldig JSON: ' + rawText.substring(0, 100));
-            }
-
-            
-            if (data.success) {
-                const res = data.results;
-                const linkInfo = res.links[0] || {};
-                console.error(`[sendSingleLink] ✅ Sent: ${res.sent}, Mails: ${res.mails_sent}, Failed: ${res.failed}`);
-
-                if (linkInfo.mail_skipped) {
-                    showToast(`Kavel #${lot.lot_number} op inactief gezet. Mail overgeslagen (er zijn al metingen).`, 'info');
-                } else if (!linkInfo.mail_sent) {
-                    showToast(`⚠️ Token aangemaakt maar mail NIET verstuurd naar ${lot.user_email || 'bewoner'}. Controleer SMTP-instellingen.`, 'warning');
-                    console.error('[sendSingleLink] ⚠️ Mail mislukt. linkInfo:', linkInfo);
-                } else {
-                    showToast(`✅ Uitnodigingsmail (${scenario}) verstuurd naar ${lot.user_email || 'bewoner'}`, 'success');
-                }
-
-                if (scenario === 'verhuizing') {
-                    if (document.getElementById('modal-overlay').style.display === 'flex') closeModal();
-                }
+        const response = await fetch('../../backend/api/admin.php?action=send-magic-link-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const linkInfo = data.results.links[0] || {};
+            if (linkInfo.mail_sent) {
+                showToast(`Mail succesvol verzonden naar ${lot.user_email}`, 'success');
+                toggleModal('modal-mail-compose', false);
                 loadDashboard();
             } else {
-                console.error('[sendSingleLink] ❌ API success:false. Error:', data.error);
-                throw new Error(data.error);
+                showToast('⚠️ Token aangemaakt, maar mail kon niet worden verzonden.', 'warning');
             }
-        } catch (e) {
-            console.error('[sendSingleLink] ❌ EXCEPTION:', e.message, e);
-            showToast('Fout bij versturen: ' + e.message, 'error');
+        } else {
+            throw new Error(data.error || 'Fout bij verzenden');
         }
-
-    });
-}
+    } catch (err) {
+        showToast('Fout: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
 
 async function sendMagicLinkAll() {
     // In development: vraag of testmodus gewenst is (stuurt alleen naar testkavels met admin-email)
@@ -995,8 +1049,14 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                     let devStr = '';
                                     let verbruikStr = '';
                                     
-                                    if (prevStand > 0) {
-                                        const verbruik = Math.abs(val - prevStand);
+                                    if (prevStand > 0 || prevStand === 0) {
+                                        let verbruik;
+                                        if (val < prevStand) {
+                                            verbruik = (99999 - prevStand) + val;
+                                        } else {
+                                            verbruik = val - prevStand;
+                                        }
+
                                         const decimals = (unit === 'kWh' ? 0 : 1);
                                         verbruikStr = `+${formatNumber(verbruik, decimals)}`;
                                         
@@ -1024,11 +1084,24 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                                     : data.readings;
 
                                 return filteredReadings.map(r => {
-                                    const photoHtml = r.image_url 
-                                        ? `<a href="../uploads/${r.image_url}" target="_blank" class="photo-link">
-                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                            Bekijk
-                                          </a>` 
+                                    const photos = [];
+                                    if (r.image_url_gas) photos.push({ type: 'gas', url: r.image_url_gas, label: 'G' });
+                                    if (r.image_url_water) photos.push({ type: 'water', url: r.image_url_water, label: 'W' });
+                                    if (r.image_url_elec) photos.push({ type: 'elec', url: r.image_url_elec, label: 'E' });
+                                    
+                                    // Fallback voor oude metingen
+                                    if (photos.length === 0 && r.image_url) {
+                                        photos.push({ type: 'main', url: r.image_url, label: '📷' });
+                                    }
+
+                                    const photoHtml = photos.length > 0 
+                                        ? `<div class="photo-group">
+                                            ${photos.map(p => `
+                                                <a href="../uploads/${p.url}" target="_blank" class="photo-link-mini" title="${p.type}">
+                                                    ${p.label}
+                                                </a>
+                                            `).join('')}
+                                           </div>` 
                                         : '<span class="no-photo">Geen</span>';
                                     
                                     let statusNL = r.status;
@@ -1038,7 +1111,10 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
 
                                     return `
                                         <tr>
-                                            <td data-label="Datum">${r.reading_date}</td>
+                                            <td data-label="Datum">
+                                                ${r.reading_date}
+                                                ${r.is_manual_correction == 1 ? '<span title="Handmatig ingevoerd" style="margin-left:5px; cursor:help;">✍️</span>' : ''}
+                                            </td>
                                             <td class="text-right" data-label="Gas">${renderCell(r.gas_new_reading, prevGas, vOrigGas, 'm³')}</td>
                                             <td class="text-right" data-label="Water">${renderCell(r.water_new_reading, prevWater, vOrigWater, 'm³')}</td>
                                             <td class="text-right" data-label="Elek">${renderCell(r.electricity_new_reading, prevElec, vOrigElec, 'kWh')}</td>
@@ -1140,6 +1216,17 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                     `;
                 })()}
 
+                <div class="section-title">Maandelijks Voorschot</div>
+                <div class="glass" style="padding: 1.5rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem;">
+                    <div>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Huidig voorschot:</span><br>
+                        <strong style="font-size: 1.4rem; color: var(--primary);">€ ${formatNumber(data.lot.monthly_advance, 2)}</strong>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="openAdvanceModal(${lotId}, ${data.lot.monthly_advance})">
+                        ✏️ Aanpassen
+                    </button>
+                </div>
+
                 <div class="section-title">Alle Metingen</div>
                 ${(() => {
                     const pastPeriods = data.history.filter(h => h.gas_prev_reading !== null && String(h.gas_prev_reading).trim() !== "");
@@ -1147,14 +1234,24 @@ async function viewHistory(lotId, resetBatch = true, occupancyId = null) {
                     // ... rest of meters history ...
                     const maxDev = parseFloat(document.getElementById('param-max-dev')?.value || 25);
                     const rows = pastPeriods.map((h, i) => {
-                        const gV = Math.abs(parseFloat(h.gas_new_reading) - parseFloat(h.gas_prev_reading));
-                        const wV = Math.abs(parseFloat(h.water_new_reading) - parseFloat(h.water_prev_reading));
-                        const eV = Math.abs(parseFloat(h.electricity_new_reading) - parseFloat(h.electricity_prev_reading));
+                        const gNew = parseFloat(h.gas_new_reading);
+                        const gOld = parseFloat(h.gas_prev_reading);
+                        const gV = (gNew < gOld) ? (99999 - gOld + gNew) : (gNew - gOld);
+
+                        const wNew = parseFloat(h.water_new_reading);
+                        const wOld = parseFloat(h.water_prev_reading);
+                        const wV = (wNew < wOld) ? (99999 - wOld + wNew) : (wNew - wOld);
+
+                        const eNew = parseFloat(h.electricity_new_reading);
+                        const eOld = parseFloat(h.electricity_prev_reading);
+                        const eV = (eNew < eOld) ? (99999 - eOld + eNew) : (eNew - eOld);
                         
                         const hPrev = pastPeriods[i + 1];
                         const devStr = (v, prevHNew, prevHPrev) => {
-                            if (hPrev && parseFloat(prevHNew) > 0) {
-                                const prevV = Math.abs(parseFloat(prevHNew) - parseFloat(prevHPrev));
+                            if (hPrev && parseFloat(prevHNew) !== null && parseFloat(prevHPrev) !== null) {
+                                const phNew = parseFloat(prevHNew);
+                                const phPrev = parseFloat(prevHPrev);
+                                const prevV = (phNew < phPrev) ? (99999 - phPrev + phNew) : (phNew - phPrev);
                                 if (prevV > 0) {
                                     const devPerc = ((v - prevV) / prevV) * 100;
                                     const isOk = Math.abs(devPerc) <= maxDev;
@@ -1709,7 +1806,6 @@ function renderInvoicePreview(p) {
                 </div>
             </div>
 
-            <div class="invoice-totals" style="margin-top:2rem; padding:1.5rem; background:rgba(0,0,0,0.2); border-radius:12px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; color:var(--text-muted)">
                     <span>Subtotaal (excl. BTW)</span>
                     <span>€ ${p.summary.subtotal_ex_vat.toFixed(2)}</span>
@@ -1718,9 +1814,17 @@ function renderInvoicePreview(p) {
                     <span>BTW (${p.summary.vat_rate}%)</span>
                     <span>€ ${p.summary.vat_amount.toFixed(2)}</span>
                 </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; color:var(--text-muted); border-top:1px solid rgba(255,255,255,0.05); padding-top:1rem;">
+                    <span>Subtotaal inclusief BTW</span>
+                    <span>€ ${p.summary.total.toFixed(2)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:1rem; color:var(--text-muted)">
+                    <span>Reeds gefactureerd (voorschotten ${p.summary.period_months} mnd)</span>
+                    <span>- € ${(p.summary.period_months * (p.lot.monthly_advance || 0)).toFixed(2)}</span>
+                </div>
                 <div style="display:flex; justify-content:space-between; font-size:1.4rem; font-weight:700; color:#fff; border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
-                    <span>TOTAAL</span>
-                    <span style="color:#60a5fa">€ ${p.summary.total.toFixed(2)}</span>
+                    <span>TE VERREKENEN</span>
+                    <span style="color:#60a5fa">€ ${(p.summary.total - (p.summary.period_months * (p.lot.monthly_advance || 0))).toFixed(2)}</span>
                 </div>
             </div>
             
@@ -2546,5 +2650,136 @@ function finishBatchInvoicing() {
     loadDashboard();
     showToast('Batch verwerking afgerond.', 'success');
     setTimeout(openInvoicesDashboard, 500);
+}
+
+// ================================================================
+// VOORSCHOT BEHEER
+// ================================================================
+
+function openAdvanceModal(lotId, currentAmount) {
+    const lot = allLots.find(l => l.id == lotId);
+    const amount = prompt('Voer het nieuwe maandelijkse voorschot in voor kavel #' + lot.lot_number + ':', currentAmount);
+    if (amount !== null) {
+        saveAdvance(lotId, parseFloat(amount));
+    }
+}
+
+async function saveAdvance(lotId, amount) {
+    if (isNaN(amount)) return showToast('Ongeldig bedrag', 'error');
+    
+    try {
+        const response = await fetch('../../backend/api/admin.php?action=update-lot-advance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lot_id: lotId, amount: amount })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Voorschot bijgewerkt', 'success');
+            viewHistory(lotId);
+            loadDashboard();
+        } else throw new Error(data.error);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function calcNewYearAdvance() {
+    showToast('Berekenen van voorschotvoorstellen...', 'info');
+    try {
+        const response = await fetch('../../backend/api/admin.php?action=calc-advance-new-year');
+        const data = await response.json();
+        
+        if (data.success) {
+            renderAdvanceProposals(data.proposals);
+            toggleModal('advance-approval-overlay', true);
+        } else throw new Error(data.error);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+function renderAdvanceProposals(proposals) {
+    const list = document.getElementById('advance-proposal-list');
+    list.innerHTML = proposals.map(p => {
+        return `
+            <tr>
+                <td>
+                    <strong>${p.resident_name}</strong><br>
+                    <small class="text-muted">Kavel #${p.lot_number}</small>
+                </td>
+                <td class="text-right">€ ${formatNumber(p.costs.gas, 2)} <small>p/m</small></td>
+                <td class="text-right">€ ${formatNumber(p.costs.water, 2)} <small>p/m</small></td>
+                <td class="text-right">€ ${formatNumber(p.costs.elec, 2)} <small>p/m</small></td>
+                <td class="text-right">€ ${formatNumber(p.costs.fixed, 2)} <small>p/m</small></td>
+                <td class="text-right">
+                    <strong style="color:var(--primary);">€ ${formatNumber(p.new_advance, 2)}</strong> <small>p/m</small>
+                </td>
+                <td>
+                    <input type="number" step="0.01" class="form-input advance-input" data-lot-id="${p.lot_id}" value="${p.new_advance.toFixed(2)}" style="padding: 0.25rem 0.5rem; font-size: 0.85rem; width: 80px;">
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function saveAllAdvances() {
+    const inputs = document.querySelectorAll('.advance-input');
+    const btn = document.getElementById('btn-save-all-advances');
+    btn.disabled = true;
+    btn.textContent = '⌛ Bezig met opslaan...';
+    
+    let count = 0;
+    try {
+        for (const input of inputs) {
+            const lotId = input.dataset.lotId;
+            const amount = parseFloat(input.value);
+            
+            const response = await fetch('../../backend/api/admin.php?action=update-lot-advance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lot_id: lotId, amount: amount })
+            });
+            const data = await response.json();
+            if (data.success) count++;
+        }
+        showToast(count + ' voorschotten succesvol opgeslagen', 'success');
+        toggleModal('advance-approval-overlay', false);
+        loadDashboard();
+    } catch (e) {
+        showToast('Fout bij opslaan: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Alle voorschotten opslaan';
+    }
+}
+
+async function sendAllInvoices() {
+    if (!confirm('Weet je zeker dat je ALLE opgestelde facturen (die nog niet verstuurd zijn) nu wilt verzenden?')) {
+        return;
+    }
+
+    const btn = document.getElementById('btn-send-all-invoices');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⌛ Bezig met verzenden...';
+
+    try {
+        const response = await fetch('../../backend/api/admin.php?action=send-all-invoices');
+        const data = await response.json();
+
+        if (data.success) {
+            let msg = `✅ ${data.count} facturen succesvol verstuurd!`;
+            if (data.errors && data.errors.length > 0) {
+                msg += `\n\nEr waren echter ${data.errors.length} fouten. Zie console voor details.`;
+                console.warn('Bulk send errors:', data.errors);
+            }
+            alert(msg);
+            loadInvoicingStats(); // Ververs de stats in de modal
+        } else {
+            throw new Error(data.error || 'Onbekende fout bij bulk verzenden.');
+        }
+    } catch (e) {
+        showToast('Fout: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
 }
 

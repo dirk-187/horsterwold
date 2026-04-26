@@ -520,7 +520,7 @@ body.modal-open {
     .col-water   { width: 85px; text-align: right; }
     .col-elec    { width: 85px; text-align: right; }
     .col-betaling { width: 105px; }
-    .col-acties  { width: 100px; }
+    .col-acties  { width: 140px; }
 }
 
 /* Tablet: 801px - 1023px (Verberg Type en Uitnodigingsmail) */
@@ -1551,3 +1551,80 @@ input[type="checkbox"] {
     }
 }
 
+
+/* Action Alarm Button Pulse */
+.btn-pulse {
+    animation: pulse-orange 2s infinite !important;
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+}
+
+@keyframes pulse-orange {
+    0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+    }
+    70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+    }
+    100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    }
+}
+
+/* ================================================================
+   MULTI-PHOTO DISPLAY
+   ================================================================ */
+.photo-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.photo-link-mini {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.photo-link-mini:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.photo-link-mini[title="gas"] { 
+    border-color: rgba(245, 158, 11, 0.4); 
+    color: #f59e0b; 
+    background: rgba(245, 158, 11, 0.08); 
+}
+.photo-link-mini[title="water"] { 
+    border-color: rgba(59, 130, 246, 0.4); 
+    color: #3b82f6; 
+    background: rgba(59, 130, 246, 0.08); 
+}
+.photo-link-mini[title="elec"] { 
+    border-color: rgba(16, 185, 129, 0.4); 
+    color: #10b981; 
+    background: rgba(16, 185, 129, 0.08); 
+}
+
+.photo-link-mini[title="gas"]:hover { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+.photo-link-mini[title="water"]:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.photo-link-mini[title="elec"]:hover { background: #10b981; color: #fff; border-color: #10b981; }
+
+.no-photo {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-style: italic;
+}

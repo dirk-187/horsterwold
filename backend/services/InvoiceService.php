@@ -56,10 +56,10 @@ class InvoiceService
             'elec'  => $occupancy['start_elec']
         ];
 
-        // 2. Consumption Math
-        $consGas   = max(0, ($reading['gas_new_reading'] ?? 0) - ($baseline['gas'] ?? 0));
-        $consWater = max(0, ($reading['water_new_reading'] ?? 0) - ($baseline['water'] ?? 0));
-        $consElec  = max(0, ($reading['electricity_new_reading'] ?? 0) - ($baseline['elec'] ?? 0));
+        // 2. Consumption Math with Rollover Logic
+        $consGas   = $this->calculateConsumption($reading['gas_new_reading'] ?? 0, $baseline['gas'] ?? 0);
+        $consWater = $this->calculateConsumption($reading['water_new_reading'] ?? 0, $baseline['water'] ?? 0);
+        $consElec  = $this->calculateConsumption($reading['electricity_new_reading'] ?? 0, $baseline['elec'] ?? 0);
         $consSolar = $reading['solar_return'] ?? 0;
 
         // 3. Costs (Excl VAT)
@@ -180,5 +180,20 @@ class InvoiceService
         $stmt = $this->db->prepare("SELECT * FROM readings WHERE occupancy_id = ? AND billing_period_id = ? ORDER BY reading_date DESC LIMIT 1");
         $stmt->execute([$occupancyId, $periodId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Calculate consumption with rollover logic for 5-digit meters
+     * If new reading < old reading, assume meter rolled over at 99999
+     */
+    private function calculateConsumption(float $newReading, float $oldReading): float
+    {
+        if ($newReading < $oldReading) {
+            // Rollover detected: (99999 - old) + new
+            return (99999 - $oldReading) + $newReading;
+        }
+        
+        // Normal case: new - old
+        return max(0, $newReading - $oldReading);
     }
 }

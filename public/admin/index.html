@@ -301,11 +301,14 @@
                      </table>
                  </div>
 
-                 <div style="text-align: center;">
-                     <button class="btn btn-primary btn-lg btn-glow" id="btn-start-batch-invoicing" style="padding: 1rem 2.5rem;">
-                         🚀 Start Batch Verwerking
-                     </button>
-                 </div>
+                  <div style="text-align: center; display: flex; flex-direction: column; gap: 1rem; align-items: center;">
+                      <button class="btn btn-primary btn-lg btn-glow" id="btn-start-batch-invoicing" style="padding: 1rem 2.5rem; width: 100%; max-width: 400px;">
+                          🚀 Start Batch Review (één voor één)
+                      </button>
+                      <button class="btn btn-secondary" id="btn-send-all-invoices" style="padding: 0.75rem 2rem; width: 100%; max-width: 400px;">
+                          ✉️ Alle opgestelde facturen nu verzenden
+                      </button>
+                  </div>
              </div>
         </div>
     </div>
@@ -431,6 +434,9 @@
                         </p>
                         <button type="button" class="btn btn-secondary btn-sm" id="btn-finalize-year" style="border-color: #fbbf24; color: #fbbf24;">
                             🏁 Jaar Afsluiten & Nieuw Jaar Starten
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-calc-advances" style="margin-top: 1rem; width: 100%;">
+                            📈 Nieuwe Voorschotten Berekenen
                         </button>
                     </div>
 
@@ -566,6 +572,44 @@
         </div>
     </div>
 
+    <!-- ===== MODAL: MAIL SAMENSTELLEN ===== -->
+    <div class="overlay" id="modal-mail-compose" style="display:none;">
+        <div class="glass detail-modal" style="max-width:600px; padding: 2.5rem;">
+            <div class="modal-head" style="padding: 0 0 1.5rem 0; border: none;">
+                <h2 id="mail-compose-title" style="margin:0;">📧 Mail Samenstellen</h2>
+                <button class="btn-close" onclick="toggleModal('modal-mail-compose', false)">✕</button>
+            </div>
+            
+            <form id="form-mail-compose">
+                <input type="hidden" id="mc-lot-id">
+                <input type="hidden" id="mc-scenario">
+                
+                <div class="form-group">
+                    <label>Ontvanger</label>
+                    <input type="text" id="mc-recipient" class="form-input" readonly style="opacity: 0.7;">
+                </div>
+
+                <div class="form-group">
+                    <label>Einddatum geldigheid link</label>
+                    <input type="date" id="mc-expiry-date" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Bericht inhoud</label>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                        Beschikbare variabelen: {name}, {lot}, {link}, {expiry}
+                    </p>
+                    <textarea id="mc-body" class="form-input" style="min-height: 50px; font-family: sans-serif; font-size: 0.9rem; line-height: 1.5;"></textarea>
+                </div>
+                
+                <div class="modal-actions" style="margin-top:2rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button type="button" class="btn btn-ghost" onclick="toggleModal('modal-mail-compose', false)">Annuleren</button>
+                    <button type="submit" class="btn btn-primary">✉️ Verzenden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- ===== MODAL: NIEUWE BEWONER ===== -->
     <div class="overlay" id="modal-new-resident" style="display:none;">
         <div class="glass detail-modal" style="max-width:500px; padding: 2.5rem;">
@@ -600,6 +644,44 @@
         </div>
     </div>
 
-    <script src="js/admin.js?v=5"></script>
+    <!-- ===== ADVANCE APPROVAL MODAL ===== -->
+    <div class="overlay" id="advance-approval-overlay" style="display:none; z-index: 10003;">
+        <div class="glass detail-modal" style="max-width:850px;">
+            <div class="modal-head">
+                <h2>📈 Voorschot Berekening & Goedkeuring</h2>
+                <button class="btn-close" onclick="toggleModal('advance-approval-overlay', false)">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                    Op basis van het gemiddelde verbruik in het afgelopen jaar en de vaste lasten voor komend jaar, 
+                    zijn de volgende voorschotten berekend. Controleer de bedragen en pas ze indien nodig aan.
+                </p>
+                <div class="glass" style="max-height: 450px; overflow-y: auto; margin-bottom: 2rem;">
+                    <table class="data-table" style="margin: 0;">
+                        <thead>
+                            <tr>
+                                <th>Bewoner / Kavel</th>
+                                <th class="text-right">Gas</th>
+                                <th class="text-right">Water</th>
+                                <th class="text-right">Elec</th>
+                                <th class="text-right">Vast</th>
+                                <th class="text-right">Totaal</th>
+                                <th style="width: 100px;">Aanpassen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="advance-proposal-list">
+                            <!-- Dynamically filled -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" onclick="toggleModal('advance-approval-overlay', false)">Annuleren</button>
+                    <button class="btn btn-primary" id="btn-save-all-advances">💾 Alle voorschotten opslaan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/admin.js?v=7"></script>
 </body>
 </html>

@@ -53,7 +53,7 @@ class MailService
     /**
      * Send an invitation (login link) to a resident
      */
-    public function sendInvitationEmail(string $toEmail, string $name, string $lotNumber, string $magicLink): bool
+    public function sendInvitationEmail(string $toEmail, string $name, string $lotNumber, string $magicLink, string $expiryDate = '', string $scenario = 'jaarafrekening', string $customBody = ''): bool
     {
         try {
             $settings = new SettingsService();
@@ -63,26 +63,60 @@ class MailService
             $mail->addAddress($toEmail, $name);
             
             $mail->isHTML(true);
-            $mail->Subject = "Uitnodiging: Geef uw meterstanden door — {$parkName} Kavel #{$lotNumber}";
             
+            if ($scenario === 'herinnering') {
+                $mail->Subject = "HERINNERING: Geef uw meterstanden door — {$parkName} Kavel #{$lotNumber}";
+            } else {
+                $mail->Subject = "Uitnodiging: Geef uw meterstanden door — {$parkName} Kavel #{$lotNumber}";
+            }
+            
+            $formattedExpiry = $expiryDate ? date('d-m-Y', strtotime($expiryDate)) : date('d-m-Y', strtotime('+7 days'));
+
+            // Het aanpasbare deel of de standaardtekst
+            if ($customBody) {
+                // Vervang eventuele placeholders in het handmatige deel
+                $customPart = str_replace('{name}', $name, $customBody);
+                $customPart = str_replace('{lot}', $lotNumber, $customPart);
+                $customPart = str_replace('{link}', $magicLink, $customPart);
+                $customPart = str_replace('{expiry}', $formattedExpiry, $customPart);
+                $customPart = nl2br(htmlspecialchars($customPart));
+            } else {
+                $reminderText = "";
+                if ($scenario === 'herinnering') {
+                    $reminderText = "<p style='color: #ef4444; font-weight: bold;'>LET OP: De meterstanden moeten voor {$formattedExpiry} verzonden zijn. Wanneer dat niet het geval is, worden er administratiekosten in rekening gebracht.</p>";
+                }
+                $customPart = "{$reminderText}<p>Let op: Deze link is geldig tot <strong>{$formattedExpiry}</strong>.</p>";
+            }
+
+            // De volledige HTML wrapper (gebaseerd op het origineel van de gebruiker)
+            $logoUrl = APP_URL . '/public/logo/logo_VVE.jpg';
             $body = "
-                <div style='font-family: sans-serif; line-height: 1.6; color: #333;'>
-                    <h2>Beste {$name},</h2>
+                <div style='font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 2rem; border-radius: 12px;'>
+                    <div style='text-align: center; margin-bottom: 2rem;'>
+                        <img src='{$logoUrl}' alt='Logo VVE' style='max-height: 80px;'>
+                    </div>
+                    <h2 style='color: #1e293b;'>Beste {$name},</h2>
                     <p>Het is weer tijd om de meterstanden door te geven voor uw kavel <strong>#{$lotNumber}</strong> op {$parkName}.</p>
                     <p>U kunt uw meterstanden eenvoudig en direct doorgeven via onze web-app. U heeft hiervoor geen wachtwoord nodig; de onderstaande link geeft u direct toegang tot uw persoonlijke invoerpagina.</p>
-                    <p style='margin: 2rem 0;'>
-                        <a href='{$magicLink}' style='background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;'>
-                            👉 Klik hier om uw meterstanden door te geven
+                    
+                    <div style='margin: 2.5rem 0;'>
+                        <p style='margin-bottom: 0.75rem; font-weight: 600; color: #1e293b;'>Geef je meterstanden nu door</p>
+                        <a href='{$magicLink}' style='background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
+                            Klik hier
                         </a>
-                    </p>
-                    <p><small><em>Let op: Deze link is uit veiligheidsoverwegingen 24 uur geldig en kan slechts eenmaal worden gebruikt om in te loggen.</em></small></p>
+                    </div>
+
+                    <div style='margin-top: 2rem; font-size: 0.95rem; color: #475569;'>
+                        {$customPart}
+                    </div>
+
                     <hr style='border: 0; border-top: 1px solid #eee; margin: 2rem 0;'>
-                    <p>Met vriendelijke groet,<br><strong>Beheer {$parkName}</strong></p>
+                    <p style='font-size: 0.9rem;'>Met vriendelijke groet,<br><strong>Beheer {$parkName}</strong></p>
                 </div>
             ";
             
             $mail->Body = $body;
-            $mail->AltBody = strip_tags(str_replace('<br>', "\n", $body));
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br />', '</div>', '</p>'], ["\n", "\n", "\n", "\n\n"], $body));
             
             $mail->send();
             return true;

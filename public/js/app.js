@@ -4,10 +4,12 @@
 
 // Local state for meter readings
 const meterState = {
-    water: { completed: false, val: null },
-    gas: { completed: false, val: null },
-    elec: { completed: false, val: null }
+    water: { completed: false, val: null, scanAttempts: 0 },
+    gas: { completed: false, val: null, scanAttempts: 0 },
+    elec: { completed: false, val: null, scanAttempts: 0 }
 };
+
+let isManualCorrectionActive = false;
 
 let currentMeterContext = null;
 let cameraStream = null;
@@ -90,7 +92,7 @@ function init() {
     if (btnLogout) {
         btnLogout.addEventListener('click', async () => {
             await API.request('login', { body: JSON.stringify({ action: 'logout' }) }).catch(console.error);
-            showScreen('login-screen');
+            window.location.href = 'logout.html';
         });
     }
 }
@@ -305,9 +307,14 @@ async function simulateCapture() {
     const fakeReading = Math.floor(Math.random() * 90000) + 10000;
     ctx.fillText(fakeReading.toString(), canvas.width / 2, canvas.height / 2 + 30);
     
-    // Proceed with the same flow as capturePhoto
-    const imgDataUrl = canvas.toDataURL('image/jpeg');
-    document.getElementById('verify-image').src = imgDataUrl;
+    // 1. Maak een schone versie voor de OCR (zonder watermark)
+    const cleanImgDataUrl = canvas.toDataURL('image/jpeg');
+    
+    // 2. Voeg nu pas het watermerk toe voor display/archivering
+    drawWatermark(ctx, canvas.width, canvas.height);
+    const watermarkedImgDataUrl = canvas.toDataURL('image/jpeg');
+    
+    document.getElementById('verify-image').src = watermarkedImgDataUrl;
 
     // Show loading state
     document.getElementById('ocr-result').value = "";
@@ -316,7 +323,8 @@ async function simulateCapture() {
     stopCamera();
     showScreen('verify-screen');
 
-    await processOCR(imgDataUrl);
+    // 3. Gebruik de SCHONE versie voor OCR
+    await processOCR(cleanImgDataUrl);
 }
 
 /**
@@ -351,7 +359,29 @@ async function processOCR(imgDataUrl) {
         alert("Netwerkfout bij het uploaden van de foto. (Is je backend/config.php goed ingesteld of composer install gedraaid?)");
     } finally {
         document.getElementById('ocr-result').placeholder = "0";
+        
+        // Count attempt
+        if (currentMeterContext && meterState[currentMeterContext]) {
+            meterState[currentMeterContext].scanAttempts++;
+            if (meterState[currentMeterContext].scanAttempts >= 2) {
+                document.getElementById('manual-entry-box').style.display = 'block';
+            }
+        }
     }
+}
+
+function enableManualEntry() {
+    isManualCorrectionActive = true;
+    const input = document.getElementById('ocr-result');
+    input.readOnly = false;
+    input.focus();
+    input.style.background = "rgba(192, 132, 252, 0.1)";
+    input.style.border = "1px solid var(--primary)";
+    
+    document.getElementById('manual-entry-box').style.display = 'none';
+    document.getElementById('ocr-warning-box').style.display = 'none';
+    document.getElementById('btn-confirm-meter').style.display = 'block';
+    document.getElementById('btn-override-ocr').style.display = 'none';
 }
 
 /**
@@ -444,8 +474,14 @@ async function capturePhoto() {
     // Draw only the cropped area
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
     
-    const imgDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    document.getElementById('verify-image').src = imgDataUrl;
+    // 1. Maak een schone versie voor de OCR (zonder watermark)
+    const cleanImgDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    
+    // 2. Voeg nu pas het watermerk toe voor display/archivering
+    drawWatermark(ctx, sw, sh);
+    const watermarkedImgDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    document.getElementById('verify-image').src = watermarkedImgDataUrl;
 
     // Show loading state
     document.getElementById('ocr-result').value = "";
@@ -455,8 +491,8 @@ async function capturePhoto() {
     stopCamera();
     showScreen('verify-screen');
 
-    // Shared OCR logic
-    await processOCR(imgDataUrl);
+    // 3. Gebruik de SCHONE versie voor OCR
+    await processOCR(cleanImgDataUrl);
 }
 
 /**
@@ -506,6 +542,47 @@ function startStabilityCheck() {
     }, 200);
 }
 
+/**
+ * Adds a premium watermark to the captured image canvas.
+ * Includes lot number and current timestamp.
+ */
+function drawWatermark(ctx, w, h) {
+    const lotNumber = (currentUser && currentUser.lot_number) ? currentUser.lot_number : '---';
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    
+    const text = `Kavel: ${lotNumber} | ${dateStr} ${timeStr}`;
+    
+    // Premium styling: semi-transparent bar at the bottom
+    // We make it proportional to the image height
+    const barHeight = Math.round(h * 0.12); 
+    const fontSize = Math.round(barHeight * 0.45);
+    
+    // 1. Background bar (semi-transparent dark)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, h - barHeight, w, barHeight);
+    
+    // 2. Text styling
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.font = `600 ${fontSize}px "Outfit", "Inter", -apple-system, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center'; // Center it for a modern look
+    
+    // Add subtle shadow for extra readability on bright backgrounds
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    
+    ctx.fillText(text, w / 2, h - (barHeight / 2));
+    
+    // Reset shadow state
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+}
+
 const meterNames = {
     water: 'Watermeter',
     gas: 'Gasmeter',
@@ -522,6 +599,13 @@ async function startMeterFlow(type) {
     document.getElementById('ocr-warning-box').style.display = 'none';
     document.getElementById('btn-confirm-meter').style.display = 'block';
     document.getElementById('btn-override-ocr').style.display = 'none';
+    document.getElementById('manual-entry-box').style.display = 'none';
+    
+    isManualCorrectionActive = false;
+    const input = document.getElementById('ocr-result');
+    input.readOnly = true;
+    input.style.background = "";
+    input.style.border = "";
 
     // Add history state for hardware/browser back button
     history.pushState({ screen: 'photo-screen' }, 'Scanner', window.location.href);
@@ -566,7 +650,8 @@ async function confirmMeter() {
                 lot_id: lotId,
                 type: currentMeterContext,
                 reading: val,
-                image: imageData
+                image: imageData,
+                is_manual_correction: isManualCorrectionActive ? 1 : 0
             })
         });
 

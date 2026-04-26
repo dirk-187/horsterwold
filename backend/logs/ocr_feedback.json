@@ -1,0 +1,194 @@
+{
+    "10049.jpeg": {
+        "feedback": "gas long sequence is correct",
+        "timestamp": "2026-04-25 19:19:07",
+        "type": "gas",
+        "expected": "10049"
+    },
+    "10049.jpg": {
+        "feedback": "gas long secuence is correct",
+        "timestamp": "2026-04-25 19:19:21",
+        "type": "gas",
+        "expected": "10049"
+    },
+    "10928.jpeg": {
+        "feedback": "electriciteit. Glinstering bij 10. Punt moeilijk waartenemen tussen 1 en 3. LCD",
+        "timestamp": "2026-04-26 08:48:45",
+        "type": "elec",
+        "expected": "10928"
+    },
+    "1093.jpg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:20:01",
+        "type": "gas",
+        "expected": "1093"
+    },
+    "1127.jpg": {
+        "feedback": "electriciteit",
+        "timestamp": "2026-04-25 19:20:13",
+        "type": "gas",
+        "expected": "1127"
+    },
+    "11273.jpeg": {
+        "feedback": "electriciteit",
+        "timestamp": "2026-04-25 19:20:21",
+        "type": "gas",
+        "expected": "11273"
+    },
+    "12231.jpeg": {
+        "feedback": "electriciteit, onleesbaar voor het oog",
+        "timestamp": "2026-04-25 19:20:37",
+        "type": "gas",
+        "expected": "12231"
+    },
+    "1708.jpeg": {
+        "feedback": "water. 2 waarde is correct.",
+        "timestamp": "2026-04-26 09:24:35",
+        "type": "water",
+        "expected": "1708"
+    },
+    "18496.jpeg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:21:20",
+        "type": "gas",
+        "expected": "18496"
+    },
+    "185.jpg": {
+        "feedback": "electriciteit. glinstering. punt staat tussen 5 en 3. baylan heeft dus 3 getallen na de punt",
+        "timestamp": "2026-04-26 08:49:47",
+        "type": "elec",
+        "expected": "185"
+    },
+    "1860.jpeg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:21:35",
+        "type": "gas",
+        "expected": "1860"
+    },
+    "31.jpg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:22:44",
+        "type": "gas",
+        "expected": "31"
+    },
+    "323.jpeg": {
+        "feedback": "water. de achtergrond van de laatste uitgelezen rode 3 wordt niet goed geetecteerd",
+        "timestamp": "2026-04-26 10:13:31",
+        "type": "water",
+        "expected": "323"
+    },
+    "5165.jpeg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:23:04",
+        "type": "gas",
+        "expected": "5165"
+    },
+    "54361.jpeg": {
+        "feedback": "eerste 5 getallen zijn correct, laatste 6 heeft rode achtergrond.",
+        "timestamp": "2026-04-26 08:52:43",
+        "type": "elec",
+        "expected": "54361"
+    },
+    "5495.jpeg": {
+        "feedback": "electriciteit. erg klein formaat. zoek de 5495 en maak een specifieke regel voor deze meter",
+        "timestamp": "2026-04-26 08:53:13",
+        "type": "elec",
+        "expected": "5495"
+    },
+    "6101.jpeg": {
+        "feedback": "de eerste 0 telt ook mee voor de first 5",
+        "timestamp": "2026-04-25 19:24:27",
+        "type": "gas",
+        "expected": "6101"
+    },
+    "810.jpeg": {
+        "feedback": "water",
+        "timestamp": "2026-04-25 19:25:03",
+        "type": "gas",
+        "expected": "810"
+    },
+    "8199.jpg": {
+        "feedback": "electriciteit. glinstering, sluit uit van test",
+        "timestamp": "2026-04-26 08:53:57",
+        "type": "elec",
+        "expected": "8199"
+    },
+    "933.jpeg": {
+        "feedback": "electriciteit. punt moelijk te herkennen, tussen 3 en 3. Baylan heeft drie getallen achter punt",
+        "timestamp": "2026-04-26 08:54:39",
+        "type": "elec",
+        "expected": "933"
+    },
+    "9553.jpeg": {
+        "feedback": "waarde 3 is correct",
+        "timestamp": "2026-04-25 19:25:36",
+        "type": "gas",
+        "expected": "9553"
+    },
+    "983.jpg": {
+        "feedback": "electriciteit. punt tussen 3.1\/ baylan drie getallen achter punt",
+        "timestamp": "2026-04-26 08:54:55",
+        "type": "elec",
+        "expected": "983"
+    },
+    "2600.jpg": {
+        "feedback": "sluit uit van test",
+        "timestamp": "2026-04-26 08:50:02",
+        "type": "elec",
+        "expected": "2600"
+    },
+    "34766.jpeg": {
+        "feedback": "0 heeft rode achtergrond en moet uitgesloten worden van lezing",
+        "timestamp": "2026-04-26 08:50:56",
+        "type": "elec",
+        "expected": "34766"
+    },
+    "34766.jpg": {
+        "feedback": "dubbele foto, sluit uit van test",
+        "timestamp": "2026-04-26 08:51:11",
+        "type": "elec",
+        "expected": "34766"
+    },
+    "35797.jpeg": {
+        "feedback": "eerste 5 getallen zijn juist, van waarde top 1. er staat een drie in een rode achtergrond",
+        "timestamp": "2026-04-26 08:52:04",
+        "type": "elec",
+        "expected": "35797"
+    },
+    "68965.jpeg": {
+        "feedback": "onscherpe foto, sluit uit van test",
+        "timestamp": "2026-04-26 08:53:27",
+        "type": "elec",
+        "expected": "68965"
+    },
+    "71725.jpeg": {
+        "feedback": "de eerste 7 wordt niet herkend",
+        "timestamp": "2026-04-26 08:53:43",
+        "type": "elec",
+        "expected": "71725"
+    },
+    "99646.jpeg": {
+        "feedback": "de 99 staat half gedraaid en is half in beeld, moeilijker af te lezen",
+        "timestamp": "2026-04-26 08:55:35",
+        "type": "elec",
+        "expected": "99646"
+    },
+    "1708.jpg": {
+        "feedback": "dubbele foto. sluit uit",
+        "timestamp": "2026-04-26 09:24:47",
+        "type": "water",
+        "expected": "1708"
+    },
+    "522.jpeg": {
+        "feedback": "waarde 3 is correct.",
+        "timestamp": "2026-04-26 09:25:03",
+        "type": "water",
+        "expected": "522"
+    },
+    "03621.jpeg": {
+        "feedback": "laatste getal is niet geheel in beeld. Kun je op basis van een deel van de digit het getal bepalen?",
+        "timestamp": "2026-04-26 09:40:33",
+        "type": "water",
+        "expected": "03621"
+    }
+}
